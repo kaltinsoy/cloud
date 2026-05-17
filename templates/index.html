@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Noisy-Neighbor Telemetry</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <style>
+        body { background-color: #121212; color: #ffffff; }
+        .card { background-color: #1e1e1e; border: none; }
+        .status-banner {
+            padding: 15px; border-radius: 5px; font-weight: bold; text-align: center; font-size: 1.5rem; transition: 0.3s;
+        }
+        .stable { background-color: #198754; color: white; }
+        .attack { background-color: #dc3545; color: white; animation: blinker 1s linear infinite; }
+        @keyframes blinker { 50% { opacity: 0.7; } }
+    </style>
+</head>
+<body>
+    <div class="container mt-4">
+        <h2 class="text-center mb-4">Noisy-Neighbor Detection Dashboard</h2>
+        
+        <!-- Status Banner -->
+        <div id="statusBanner" class="status-banner stable mb-4">
+            [✓] SYSTEM STABLE: No Interference Detected
+        </div>
+
+        <div class="row">
+            <!-- Memory Bandwidth Chart -->
+            <div class="col-md-6 mb-4">
+                <div class="card p-3">
+                    <h5 class="text-center">Memory Bandwidth (MB/s)</h5>
+                    <canvas id="mbpsChart"></canvas>
+                </div>
+            </div>
+            <!-- LLC Misses Chart -->
+            <div class="col-md-6 mb-4">
+                <div class="card p-3">
+                    <h5 class="text-center">LLC Misses</h5>
+                    <canvas id="llcChart"></canvas>
+                </div>
+            </div>
+            <!-- IPC Chart -->
+            <div class="col-md-12 mb-4">
+                <div class="card p-3">
+                    <h5 class="text-center">Victim IPC (Instructions Per Cycle)</h5>
+                    <canvas id="ipcChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+
+        // Chart Configuration Template
+        const commonOptions = {
+            responsive: true,
+            scales: {
+                x: { display: false }, // Hide time labels for clean scrolling
+                y: { beginAtZero: true, grid: { color: '#333' }, ticks: { color: '#ccc' } }
+            },
+            plugins: { legend: { display: false } },
+            animation: { duration: 0 } // Disable animation for snappy live updates
+        };
+
+        function createChart(ctxId, color) {
+            return new Chart(document.getElementById(ctxId), {
+                type: 'line',
+                data: { labels: [], datasets: [{ data: [], borderColor: color, borderWidth: 2, fill: false, tension: 0.3 }] },
+                options: commonOptions
+            });
+        }
+
+        // Initialize 3 Charts
+        const mbpsChart = createChart('mbpsChart', '#00d2ff');
+        const llcChart = createChart('llcChart', '#ff4b2b');
+        const ipcChart = createChart('ipcChart', '#00ff87');
+
+        // Function to update chart data
+        function updateChart(chart, newData) {
+            chart.data.labels.push(''); // Add blank label to advance X axis
+            chart.data.datasets[0].data.push(newData);
+            if (chart.data.labels.length > 30) {
+                chart.data.labels.shift();
+                chart.data.datasets[0].data.shift();
+            }
+            chart.update();
+        }
+
+        // Listen for Telemetry from Python Daemon
+        socket.on('update_dashboard', function(data) {
+            updateChart(mbpsChart, data.mbps);
+            updateChart(llcChart, data.llc_misses);
+            updateChart(ipcChart, data.ipc);
+
+            // Update UI Status Banner
+            const banner = document.getElementById('statusBanner');
+            if (data.is_attack === 1) {
+                banner.className = 'status-banner attack mb-4';
+                banner.innerText = '[!] WARNING: NOISY-NEIGHBOR DETECTED! Deploying Intel RDT Mitigation...';
+            } else {
+                banner.className = 'status-banner stable mb-4';
+                banner.innerText = '[✓] SYSTEM STABLE: No Interference Detected';
+            }
+        });
+    </script>
+</body>
+</html>
