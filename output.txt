@@ -1,0 +1,14 @@
+[+] Model kaydedildi: rf_model.pkl
+[+] Baseline IPC'leri kaydedildi: baseline_ipc.pkl
+
+======================================================================
+  EĞİTİM TAMAMLANDI
+======================================================================
+  Random Forest F1:    0.9863
+  CV F1 (5-fold):      0.9775 (± 0.0213)
+  LR baseline F1:      0.0000
+  Precision:           1.0000
+  Recall:              0.9730
+  ROC-AUC:             1.0000
+======================================================================
+lenovo@lenovows:~/cloud2$

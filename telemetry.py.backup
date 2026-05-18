@@ -1,0 +1,333 @@
+"""
+Noisy-Neighbor Telemetry Collector
+====================================
+
+Bu script bir co-located deney sırasında her 100ms'de bir core 0 (victim)
+ve core 1 (attacker) için perf counter ölçümü yapar. Sistem geneli için
+uncore IMC counter'larını okur ve toplam memory bandwidth hesaplar.
+
+ÖNCEKİ HATA: Sadece core 0 (victim) izleniyordu. Bu yüzden aggressor
+identification yapılamıyordu — kim "attacker" kim "victim" sadece
+script argümanından geliyordu, gerçek davranış ölçülmüyordu.
+
+YENİ YAKLAŞIM: Hem core 0 hem core 1 için ayrı perf instance'ları
+çalıştır. CSV'de iki workload'un da feature'ları (per-core) yer alıyor.
+Bu sayede:
+  - Aggressor identification çalışabiliyor
+  - Daha zengin training data
+  - Per-tenant analiz mümkün
+
+İŞ AKIŞI:
+  1. core 0 için perf stat (-C 0)
+  2. core 1 için perf stat (-C 1)
+  3. sistem geneli uncore IMC (-a)
+  4. Üç çıktıyı timestamp bazında birleştir
+  5. Feature engineering uygula
+  6. CSV'ye yaz
+"""
+
+import subprocess
+import sys
+import os
+import argparse
+import pandas as pd
+import numpy as np
+
+
+# ============================================================
+# AYARLAR
+# ============================================================
+INTERVAL_MS = 100
+DURATION_SEC = 60
+VICTIM_CORE = 0
+ATTACKER_CORE = 1
+
+CORE_EVENTS = "instructions,cycles,LLC-load-misses,LLC-loads"
+
+UNCORE_EVENTS = (
+    "uncore_imc_0/cas_count_read/,uncore_imc_0/cas_count_write/,"
+    "uncore_imc_1/cas_count_read/,uncore_imc_1/cas_count_write/,"
+    "uncore_imc_2/cas_count_read/,uncore_imc_2/cas_count_write/,"
+    "uncore_imc_3/cas_count_read/,uncore_imc_3/cas_count_write/,"
+    "uncore_imc_4/cas_count_read/,uncore_imc_4/cas_count_write/,"
+    "uncore_imc_5/cas_count_read/,uncore_imc_5/cas_count_write/"
+)
+
+
+# ============================================================
+# PERF CSV PARSER
+# ============================================================
+def parse_perf_csv(filepath):
+    """
+    perf stat -x ',' formatındaki CSV'yi parse et.
+    Birim dönüşümlerini (MiB, KiB, B → ham byte) tersine çevir.
+    """
+    records = []
+    if not os.path.exists(filepath):
+        return records
+
+    with open(filepath, 'r') as f:
+        for line in f:
+            if line.startswith('#') or not line.strip():
+                continue
+
+            parts = [p.strip() for p in line.split(',')]
+            if len(parts) < 4:
+                continue
+            if parts[1] in ['<not counted>', '<not supported>', '']:
+                continue
+
+            try:
+                val = float(parts[1])
+                unit = parts[2] if len(parts) > 2 else ''
+                event_name = parts[3] if len(parts) > 3 else ''
+
+                # perf'in otomatik scaling'ini ham CAS count'a çevir
+                # (CAS = 64 byte per transfer)
+                if 'GiB' in unit:
+                    val = (val * 1073741824) / 64
+                elif 'MiB' in unit:
+                    val = (val * 1048576) / 64
+                elif 'KiB' in unit:
+                    val = (val * 1024) / 64
+                elif unit in ('B', 'Bytes'):
+                    val = val / 64
+
+                records.append({
+                    "timestamp": float(parts[0]),
+                    "event": event_name,
+                    "value": val,
+                })
+            except (ValueError, IndexError):
+                continue
+
+    return records
+
+
+# ============================================================
+# PERF KOMUTU OLUŞTURUCU
+# ============================================================
+def make_perf_cmd(events, core_or_all, output_file):
+    """
+    perf stat komutu oluştur.
+
+    core_or_all: int (örn. 0) veya "all" (sistem geneli için)
+    """
+    cmd = [
+        "perf", "stat",
+        "-I", str(INTERVAL_MS),
+        "-x", ",",
+        "-e", events,
+        "-o", output_file,
+    ]
+    if core_or_all == "all":
+        cmd.append("-a")
+    else:
+        cmd.extend(["-C", str(core_or_all)])
+
+    cmd.extend(["sleep", str(DURATION_SEC)])
+    return cmd
+
+
+# ============================================================
+# FEATURE ENGINEERING (PER-CORE)
+# ============================================================
+def engineer_core_features(df_core, prefix):
+    """
+    Tek bir core için IPC, miss rate, cache dominance hesapla.
+
+    prefix: 'victim_' veya 'attacker_' (kolon adlarına ekleniyor)
+    """
+    df = df_core.copy()
+
+    # IPC
+    if 'instructions' in df.columns and 'cycles' in df.columns:
+        df[f'{prefix}IPC'] = df['instructions'] / df['cycles'].replace(0, np.nan)
+
+    # Miss rate
+    if 'LLC-loads' in df.columns and 'LLC-load-misses' in df.columns:
+        df[f'{prefix}miss_rate'] = (
+            df['LLC-load-misses'] / df['LLC-loads'].replace(0, np.nan)
+        )
+
+    # Cache dominance proxy
+    if all(c in df.columns for c in ['LLC-loads', 'LLC-load-misses', 'cycles']):
+        llc_intensity = df['LLC-loads'] / df['cycles'].replace(0, np.nan)
+        miss_rate = (df['LLC-load-misses']
+                     / df['LLC-loads'].replace(0, np.nan)).fillna(0)
+        df[f'{prefix}cache_dominance'] = llc_intensity * (1 - miss_rate)
+
+    # Yeniden adlandır
+    df = df.rename(columns={
+        'instructions': f'{prefix}instructions',
+        'cycles':       f'{prefix}cycles',
+        'LLC-loads':    f'{prefix}LLC-loads',
+        'LLC-load-misses': f'{prefix}LLC-load-misses',
+    })
+
+    return df
+
+
+# ============================================================
+# MAIN
+# ============================================================
+def main():
+    parser = argparse.ArgumentParser(
+        description="Co-located workload telemetry (her iki core izlenir)."
+    )
+    parser.add_argument('--victim', required=True,
+                        help='Victim workload adı (örn. sysbench)')
+    parser.add_argument('--attacker', required=True,
+                        help='Attacker workload adı (örn. STREAM, none)')
+    parser.add_argument('--run_id', required=True,
+                        help='Run iterasyon numarası')
+    parser.add_argument('--duration', type=int, default=DURATION_SEC,
+                        help='Ölçüm süresi (saniye)')
+    args = parser.parse_args()
+
+    print(f"[*] Telemetry: {args.victim} (core {VICTIM_CORE}) "
+          f"vs {args.attacker} (core {ATTACKER_CORE}), {args.duration}s")
+
+    # Geçici dosyalar
+    f_victim = "tmp_victim.csv"
+    f_attacker = "tmp_attacker.csv"
+    f_uncore = "tmp_uncore.csv"
+
+    # 3 perf instance'ı paralel başlat
+    cmd_victim = make_perf_cmd(CORE_EVENTS, VICTIM_CORE, f_victim)
+    cmd_attacker = make_perf_cmd(CORE_EVENTS, ATTACKER_CORE, f_attacker)
+    cmd_uncore = make_perf_cmd(UNCORE_EVENTS, "all", f_uncore)
+
+    try:
+        p_v = subprocess.Popen(cmd_victim, stderr=subprocess.PIPE)
+        p_a = subprocess.Popen(cmd_attacker, stderr=subprocess.PIPE)
+        p_u = subprocess.Popen(cmd_uncore, stderr=subprocess.PIPE)
+
+        p_v.wait()
+        p_a.wait()
+        p_u.wait()
+    except KeyboardInterrupt:
+        print("\n[*] Interrupt — perf process'leri durduruluyor...")
+        for p in (p_v, p_a, p_u):
+            try:
+                p.terminate()
+            except Exception:
+                pass
+        sys.exit(1)
+
+    print("[*] Perf ölçümleri tamamlandı, veri işleniyor...")
+
+    # Parse
+    victim_data = parse_perf_csv(f_victim)
+    attacker_data = parse_perf_csv(f_attacker)
+    uncore_data = parse_perf_csv(f_uncore)
+
+    if not victim_data:
+        _, err_v = p_v.communicate()
+        print(f"[-] Victim core ölçümü başarısız!")
+        if err_v:
+            print(err_v.decode('utf-8', errors='replace'))
+        sys.exit(1)
+    if not attacker_data:
+        _, err_a = p_a.communicate()
+        print(f"[-] Attacker core ölçümü başarısız!")
+        if err_a:
+            print(err_a.decode('utf-8', errors='replace'))
+        sys.exit(1)
+    if not uncore_data:
+        _, err_u = p_u.communicate()
+        print(f"[-] Uncore IMC ölçümü başarısız!")
+        if err_u:
+            print(err_u.decode('utf-8', errors='replace'))
+        sys.exit(1)
+
+    # DataFrame'lere çevir
+    df_v = pd.DataFrame(victim_data)
+    df_a = pd.DataFrame(attacker_data)
+    df_u = pd.DataFrame(uncore_data)
+
+    # Timestamp'leri 0.1 saniye hassasiyetine yuvarla
+    for df in (df_v, df_a, df_u):
+        df['time_step'] = df['timestamp'].round(1)
+
+    # Pivot: her event ayrı kolon olsun
+    df_v_pivot = df_v.pivot_table(
+        index='time_step', columns='event', values='value'
+    ).reset_index()
+    df_a_pivot = df_a.pivot_table(
+        index='time_step', columns='event', values='value'
+    ).reset_index()
+
+    # Uncore: tüm 6 kanalı toplam (sistem geneli)
+    df_u_total = df_u.groupby('time_step')['value'].sum().reset_index()
+    df_u_total.rename(columns={'value': 'cas_count_total'}, inplace=True)
+
+    # Per-core feature engineering
+    df_v_pivot = engineer_core_features(df_v_pivot, prefix='victim_')
+    df_a_pivot = engineer_core_features(df_a_pivot, prefix='attacker_')
+
+    # Üçünü timestamp'te merge
+    df_master = df_v_pivot.merge(df_a_pivot, on='time_step', how='inner')
+    df_master = df_master.merge(df_u_total, on='time_step', how='inner')
+
+    # Sistem geneli memory bandwidth (MB/s)
+    # cas_count_total per 100ms → MB/s = (count * 64 byte / 1MB) * 10 (saniye başına)
+    df_master['Total_MB_per_sec'] = (
+        df_master['cas_count_total'] * 64 / 1048576
+    ) * 10
+
+    # Geri uyumluluk için (train_model.py'nin beklediği isimler)
+    if 'victim_IPC' in df_master.columns:
+        df_master['IPC'] = df_master['victim_IPC']  # victim'in IPC'si ana sinyal
+    if 'victim_cache_dominance' in df_master.columns:
+        df_master['cache_dominance_score'] = df_master['victim_cache_dominance']
+    if 'victim_LLC-load-misses' in df_master.columns:
+        df_master['LLC-load-misses'] = df_master['victim_LLC-load-misses']
+    if 'victim_LLC-loads' in df_master.columns:
+        df_master['LLC-loads'] = df_master['victim_LLC-loads']
+    if 'victim_instructions' in df_master.columns:
+        df_master['instructions'] = df_master['victim_instructions']
+    if 'victim_cycles' in df_master.columns:
+        df_master['cycles'] = df_master['victim_cycles']
+
+    # Etiket bilgileri
+    df_master['victim'] = args.victim
+    df_master['attacker'] = args.attacker
+    df_master['run_id'] = args.run_id
+
+    # Kolonları organize et (önemli olanlar başta)
+    front_cols = [
+        'time_step', 'victim', 'attacker', 'run_id',
+        'IPC', 'Total_MB_per_sec', 'cache_dominance_score',
+        'LLC-load-misses', 'LLC-loads', 'instructions', 'cycles',
+        'cas_count_total',
+        # Per-core
+        'victim_IPC', 'victim_miss_rate', 'victim_cache_dominance',
+        'attacker_IPC', 'attacker_miss_rate', 'attacker_cache_dominance',
+    ]
+    front_cols = [c for c in front_cols if c in df_master.columns]
+    other_cols = [c for c in df_master.columns if c not in front_cols]
+    df_master = df_master[front_cols + other_cols]
+
+    # Inf / NaN temizle
+    df_master = df_master.replace([np.inf, -np.inf], np.nan).dropna(subset=['IPC'])
+
+    output_file = f"data_{args.victim}_vs_{args.attacker}_run{args.run_id}.csv"
+    df_master.to_csv(output_file, index=False)
+
+    # Temp dosyaları sil
+    for f in (f_victim, f_attacker, f_uncore):
+        if os.path.exists(f):
+            os.remove(f)
+
+    print(f"[+] {len(df_master)} sample → {output_file}")
+    if len(df_master) > 0:
+        print("\nÖrnek satırlar:")
+        cols_show = ['time_step', 'IPC', 'Total_MB_per_sec',
+                     'attacker_IPC', 'attacker_cache_dominance']
+        cols_show = [c for c in cols_show if c in df_master.columns]
+        print(df_master[cols_show].head().to_string())
+
+
+if __name__ == "__main__":
+    main()

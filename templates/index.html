@@ -3,109 +3,1006 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Noisy-Neighbor Telemetry</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+    <title>Noisy-Neighbor Detection Dashboard</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.4/socket.io.min.js"></script>
     <style>
-        body { background-color: #121212; color: #ffffff; }
-        .card { background-color: #1e1e1e; border: none; }
-        .status-banner {
-            padding: 15px; border-radius: 5px; font-weight: bold; text-align: center; font-size: 1.5rem; transition: 0.3s;
+        :root {
+            --bg:         #f8fafc;
+            --card:       #ffffff;
+            --border:     #e2e8f0;
+            --border-strong: #cbd5e1;
+            --text:       #0f172a;
+            --text-soft:  #475569;
+            --muted:      #94a3b8;
+
+            --primary:    #6366f1;
+            --primary-light: #eef2ff;
+            --primary-dark:  #4f46e5;
+
+            --success:    #10b981;
+            --success-light: #d1fae5;
+            --warning:    #f59e0b;
+            --warning-light: #fef3c7;
+            --danger:     #ef4444;
+            --danger-light: #fee2e2;
+            --info:       #3b82f6;
+            --info-light: #dbeafe;
+            --purple:     #8b5cf6;
+            --purple-light: #ede9fe;
+
+            --shadow-sm:  0 1px 2px rgba(15,23,42,0.04);
+            --shadow:     0 1px 3px rgba(15,23,42,0.06), 0 1px 2px rgba(15,23,42,0.04);
+            --shadow-lg:  0 10px 25px -5px rgba(15,23,42,0.08), 0 4px 6px -2px rgba(15,23,42,0.04);
+
+            --radius:     12px;
+            --radius-sm:  8px;
+            --radius-lg:  16px;
         }
-        .stable { background-color: #198754; color: white; }
-        .attack { background-color: #dc3545; color: white; animation: blinker 1s linear infinite; }
-        @keyframes blinker { 50% { opacity: 0.7; } }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.5;
+            -webkit-font-smoothing: antialiased;
+            min-height: 100vh;
+        }
+
+        /* ============== HEADER ============== */
+        .header {
+            background: var(--card);
+            border-bottom: 1px solid var(--border);
+            padding: 18px 32px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: var(--shadow-sm);
+        }
+        .header-inner {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .logo-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: var(--radius-sm);
+            background: linear-gradient(135deg, var(--primary), var(--purple));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 20px;
+            font-weight: 700;
+            box-shadow: var(--shadow);
+        }
+        .logo-text {
+            display: flex;
+            flex-direction: column;
+        }
+        .logo-title {
+            font-size: 16px;
+            font-weight: 700;
+            color: var(--text);
+            letter-spacing: -0.01em;
+        }
+        .logo-subtitle {
+            font-size: 12px;
+            color: var(--muted);
+            font-weight: 500;
+        }
+        .connection-pill {
+            padding: 6px 14px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            background: var(--success-light);
+            color: var(--success);
+        }
+        .connection-pill.disconnected {
+            background: var(--danger-light);
+            color: var(--danger);
+        }
+        .pulse-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: currentColor;
+            animation: pulse-dot 2s infinite;
+        }
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+
+        /* ============== MAIN CONTAINER ============== */
+        .main {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 32px;
+        }
+
+        /* ============== STATUS BANNER ============== */
+        .status-banner {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 20px 24px;
+            border-radius: var(--radius);
+            font-weight: 600;
+            font-size: 15px;
+            margin-bottom: 28px;
+            box-shadow: var(--shadow);
+            border: 1px solid transparent;
+            transition: all 0.3s;
+        }
+        .status-banner.stable {
+            background: var(--success-light);
+            color: var(--success);
+            border-color: rgba(16,185,129,0.2);
+        }
+        .status-banner.alarm {
+            background: var(--danger-light);
+            color: var(--danger);
+            border-color: rgba(239,68,68,0.2);
+        }
+        .status-banner.mitigating {
+            background: var(--purple-light);
+            color: var(--purple);
+            border-color: rgba(139,92,246,0.2);
+        }
+        .status-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            flex-shrink: 0;
+        }
+        .status-text {
+            flex: 1;
+        }
+        .status-title {
+            font-size: 14px;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            text-transform: uppercase;
+        }
+        .status-message {
+            font-size: 14px;
+            font-weight: 500;
+            margin-top: 2px;
+            opacity: 0.95;
+        }
+
+        /* ============== TABS ============== */
+        .tabs {
+            display: flex;
+            gap: 4px;
+            background: var(--card);
+            padding: 6px;
+            border-radius: var(--radius);
+            border: 1px solid var(--border);
+            margin-bottom: 24px;
+            box-shadow: var(--shadow-sm);
+            width: fit-content;
+        }
+        .tab {
+            padding: 10px 18px;
+            border-radius: var(--radius-sm);
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--text-soft);
+            cursor: pointer;
+            transition: all 0.2s;
+            border: none;
+            background: transparent;
+            font-family: inherit;
+        }
+        .tab:hover {
+            color: var(--text);
+            background: var(--bg);
+        }
+        .tab.active {
+            background: var(--primary);
+            color: white;
+            font-weight: 600;
+            box-shadow: var(--shadow);
+        }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; animation: fade-in 0.3s ease-out; }
+        @keyframes fade-in {
+            from { opacity: 0; transform: translateY(4px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+
+        /* ============== CARDS ============== */
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            box-shadow: var(--shadow);
+            overflow: hidden;
+            transition: box-shadow 0.2s;
+        }
+        .card:hover { box-shadow: var(--shadow-lg); }
+
+        .card-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .card-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-soft);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .card-subtitle {
+            font-size: 11px;
+            color: var(--muted);
+            font-weight: 500;
+        }
+        .card-body {
+            padding: 20px;
+        }
+
+        /* ============== STAT CARDS ============== */
+        .stat-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .stat-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 20px;
+            box-shadow: var(--shadow);
+            position: relative;
+            overflow: hidden;
+            transition: all 0.2s;
+        }
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 3px;
+            background: var(--accent-color, var(--primary));
+        }
+        .stat-card.blue   { --accent-color: var(--info); }
+        .stat-card.purple { --accent-color: var(--purple); }
+        .stat-card.green  { --accent-color: var(--success); }
+        .stat-card.amber  { --accent-color: var(--warning); }
+        .stat-card.red    { --accent-color: var(--danger); }
+
+        .stat-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .stat-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: var(--radius-sm);
+            background: var(--accent-color, var(--primary-light));
+            color: white;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+        }
+        .stat-value {
+            font-size: 32px;
+            font-weight: 700;
+            color: var(--text);
+            line-height: 1;
+            font-feature-settings: 'tnum';
+        }
+        .stat-unit {
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--muted);
+            margin-left: 4px;
+        }
+        .stat-trend {
+            font-size: 12px;
+            color: var(--muted);
+            margin-top: 8px;
+            font-weight: 500;
+        }
+
+        /* ============== CHART GRID ============== */
+        .chart-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .chart-grid-full {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+        }
+        @media (max-width: 1024px) {
+            .chart-grid { grid-template-columns: 1fr; }
+        }
+        .chart-container {
+            position: relative;
+            height: 200px;
+        }
+        .chart-container-tall {
+            position: relative;
+            height: 280px;
+        }
+
+        /* ============== EVENT LOG ============== */
+        .event-list {
+            max-height: 500px;
+            overflow-y: auto;
+            padding: 0;
+        }
+        .event-list::-webkit-scrollbar { width: 6px; }
+        .event-list::-webkit-scrollbar-track { background: var(--bg); }
+        .event-list::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
+
+        .event-item {
+            display: flex;
+            gap: 14px;
+            padding: 14px 20px;
+            border-bottom: 1px solid var(--border);
+            transition: background 0.15s;
+        }
+        .event-item:last-child { border-bottom: none; }
+        .event-item:hover { background: var(--bg); }
+        .event-marker {
+            width: 8px;
+            border-radius: 4px;
+            flex-shrink: 0;
+            margin-top: 4px;
+            height: 8px;
+            background: var(--muted);
+        }
+        .event-item.trigger    .event-marker { background: var(--danger); }
+        .event-item.effective  .event-marker { background: var(--success); }
+        .event-item.partial    .event-marker { background: var(--warning); }
+        .event-item.ineffective .event-marker { background: var(--danger); }
+        .event-item.released   .event-marker { background: var(--info); }
+
+        .event-body { flex: 1; }
+        .event-time {
+            font-size: 11px;
+            color: var(--muted);
+            font-family: 'JetBrains Mono', monospace;
+            margin-bottom: 4px;
+        }
+        .event-text {
+            font-size: 14px;
+            color: var(--text);
+            font-weight: 500;
+        }
+        .event-text strong { color: var(--text); font-weight: 700; }
+
+        .empty-state {
+            padding: 60px 20px;
+            text-align: center;
+            color: var(--muted);
+        }
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 12px;
+            opacity: 0.5;
+        }
+
+        /* ============== INSPECTOR CODE ============== */
+        pre.code-block {
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: 18px;
+            border-radius: var(--radius-sm);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            overflow-x: auto;
+            margin: 0;
+        }
+
+        /* ============== KEY-VALUE ROWS ============== */
+        .kv-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid var(--border);
+        }
+        .kv-row:last-child { border-bottom: none; }
+        .kv-label {
+            font-size: 13px;
+            color: var(--text-soft);
+            font-weight: 500;
+        }
+        .kv-value {
+            font-size: 14px;
+            font-weight: 600;
+            color: var(--text);
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .kv-badge {
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 600;
+            background: var(--success-light);
+            color: var(--success);
+        }
+        .kv-badge.active {
+            background: var(--purple-light);
+            color: var(--purple);
+        }
     </style>
 </head>
 <body>
-    <div class="container mt-4">
-        <h2 class="text-center mb-4">Noisy-Neighbor Detection Dashboard</h2>
-        
-        <!-- Status Banner -->
-        <div id="statusBanner" class="status-banner stable mb-4">
-            [✓] SYSTEM STABLE: No Interference Detected
+
+<!-- ===================== HEADER ===================== -->
+<header class="header">
+    <div class="header-inner">
+        <div class="logo">
+            <div class="logo-icon">🛡️</div>
+            <div class="logo-text">
+                <div class="logo-title">Noisy-Neighbor Detection</div>
+                <div class="logo-subtitle">Real-time microarchitectural telemetry</div>
+            </div>
+        </div>
+        <div id="connectionStatus" class="connection-pill disconnected">
+            <span class="pulse-dot"></span>
+            <span>Disconnected</span>
+        </div>
+    </div>
+</header>
+
+<main class="main">
+
+    <!-- ===================== STATUS BANNER ===================== -->
+    <div id="statusBanner" class="status-banner stable">
+        <div class="status-icon">✓</div>
+        <div class="status-text">
+            <div class="status-title" id="statusTitle">System Stable</div>
+            <div class="status-message" id="statusMessage">No interference detected — all workloads running normally</div>
+        </div>
+    </div>
+
+    <!-- ===================== TABS ===================== -->
+    <div class="tabs">
+        <button class="tab active" data-tab="live">Live Monitoring</button>
+        <button class="tab" data-tab="events">Event Log</button>
+        <button class="tab" data-tab="stats">Statistics</button>
+        <button class="tab" data-tab="inspector">Inspector</button>
+    </div>
+
+    <!-- ===================== LIVE TAB ===================== -->
+    <div class="tab-content active" id="tab-live">
+
+        <div class="stat-grid">
+            <div class="stat-card green">
+                <div class="stat-label">
+                    Victim IPC
+                    <span class="stat-icon">⚡</span>
+                </div>
+                <div class="stat-value"><span id="statIPC">0.00</span></div>
+                <div class="stat-trend">Instructions per cycle</div>
+            </div>
+            <div class="stat-card blue">
+                <div class="stat-label">
+                    Memory Bandwidth
+                    <span class="stat-icon">📊</span>
+                </div>
+                <div class="stat-value"><span id="statMB">0</span><span class="stat-unit">MB/s</span></div>
+                <div class="stat-trend">DRAM total traffic</div>
+            </div>
+            <div class="stat-card amber">
+                <div class="stat-label">
+                    LLC Misses
+                    <span class="stat-icon">⚠</span>
+                </div>
+                <div class="stat-value"><span id="statLLC">0</span></div>
+                <div class="stat-trend">Cache miss count</div>
+            </div>
+            <div class="stat-card purple">
+                <div class="stat-label">
+                    ML Confidence
+                    <span class="stat-icon">🧠</span>
+                </div>
+                <div class="stat-value"><span id="statConf">0</span><span class="stat-unit">%</span></div>
+                <div class="stat-trend">Random Forest prediction</div>
+            </div>
         </div>
 
-        <div class="row">
-            <!-- Memory Bandwidth Chart -->
-            <div class="col-md-6 mb-4">
-                <div class="card p-3">
-                    <h5 class="text-center">Memory Bandwidth (MB/s)</h5>
-                    <canvas id="mbpsChart"></canvas>
+        <div class="chart-grid">
+            <div class="card">
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">Memory Bandwidth</div>
+                        <div class="card-subtitle">MB per second • last 60 samples</div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="mbpsChart"></canvas>
+                    </div>
                 </div>
             </div>
-            <!-- LLC Misses Chart -->
-            <div class="col-md-6 mb-4">
-                <div class="card p-3">
-                    <h5 class="text-center">LLC Misses</h5>
-                    <canvas id="llcChart"></canvas>
+
+            <div class="card">
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">LLC Cache Misses</div>
+                        <div class="card-subtitle">Misses per sample • last 60 samples</div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container">
+                        <canvas id="llcChart"></canvas>
+                    </div>
                 </div>
             </div>
-            <!-- IPC Chart -->
-            <div class="col-md-12 mb-4">
-                <div class="card p-3">
-                    <h5 class="text-center">Victim IPC (Instructions Per Cycle)</h5>
-                    <canvas id="ipcChart"></canvas>
+        </div>
+
+        <div class="chart-grid-full">
+            <div class="card">
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">Victim IPC over Time</div>
+                        <div class="card-subtitle">Instructions per cycle • the primary signal for noisy-neighbor detection</div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container-tall">
+                        <canvas id="ipcChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ===================== EVENTS TAB ===================== -->
+    <div class="tab-content" id="tab-events">
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <div class="card-title">Mitigation Event Log</div>
+                    <div class="card-subtitle">Triggered, results and releases — most recent first</div>
+                </div>
+            </div>
+            <div class="event-list" id="eventLog">
+                <div class="empty-state">
+                    <div class="empty-state-icon">📋</div>
+                    <div>No events yet — system is stable.</div>
                 </div>
             </div>
         </div>
     </div>
 
-    <script>
-        const socket = io();
+    <!-- ===================== STATS TAB ===================== -->
+    <div class="tab-content" id="tab-stats">
 
-        // Chart Configuration Template
-        const commonOptions = {
-            responsive: true,
-            scales: {
-                x: { display: false }, // Hide time labels for clean scrolling
-                y: { beginAtZero: true, grid: { color: '#333' }, ticks: { color: '#ccc' } }
-            },
-            plugins: { legend: { display: false } },
-            animation: { duration: 0 } // Disable animation for snappy live updates
-        };
+        <div class="stat-grid">
+            <div class="stat-card blue">
+                <div class="stat-label">Total Samples<span class="stat-icon">📈</span></div>
+                <div class="stat-value" id="statTotalSamples">0</div>
+                <div class="stat-trend">Telemetry observations</div>
+            </div>
+            <div class="stat-card amber">
+                <div class="stat-label">Total Alarms<span class="stat-icon">🔔</span></div>
+                <div class="stat-value" id="statTotalAlarms">0</div>
+                <div class="stat-trend">ML-flagged samples</div>
+            </div>
+            <div class="stat-card purple">
+                <div class="stat-label">Mitigations<span class="stat-icon">🛡️</span></div>
+                <div class="stat-value" id="statMitigations">0</div>
+                <div class="stat-trend">CAT/MBA applied</div>
+            </div>
+            <div class="stat-card green">
+                <div class="stat-label">Releases<span class="stat-icon">✓</span></div>
+                <div class="stat-value" id="statReleases">0</div>
+                <div class="stat-trend">Returned to baseline</div>
+            </div>
+        </div>
 
-        function createChart(ctxId, color) {
-            return new Chart(document.getElementById(ctxId), {
-                type: 'line',
-                data: { labels: [], datasets: [{ data: [], borderColor: color, borderWidth: 2, fill: false, tension: 0.3 }] },
-                options: commonOptions
-            });
-        }
+        <div class="card">
+            <div class="card-header">
+                <div>
+                    <div class="card-title">Mitigation Recovery History</div>
+                    <div class="card-subtitle">IPC recovery percentage for the last 20 mitigations</div>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="chart-container-tall">
+                    <canvas id="recoveryChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
 
-        // Initialize 3 Charts
-        const mbpsChart = createChart('mbpsChart', '#00d2ff');
-        const llcChart = createChart('llcChart', '#ff4b2b');
-        const ipcChart = createChart('ipcChart', '#00ff87');
+    <!-- ===================== INSPECTOR TAB ===================== -->
+    <div class="tab-content" id="tab-inspector">
+        <div class="chart-grid">
+            <div class="card">
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">Hysteresis State Machine</div>
+                        <div class="card-subtitle">Current trigger / recovery counters</div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="kv-row">
+                        <span class="kv-label">Mitigation Active</span>
+                        <span class="kv-badge" id="hystActive">Inactive</span>
+                    </div>
+                    <div class="kv-row">
+                        <span class="kv-label">Sample Count</span>
+                        <span class="kv-value" id="hystSamples">0</span>
+                    </div>
+                    <div class="kv-row">
+                        <span class="kv-label">Trigger Threshold (K)</span>
+                        <span class="kv-value">3 consecutive alarms</span>
+                    </div>
+                    <div class="kv-row">
+                        <span class="kv-label">Release Threshold (M)</span>
+                        <span class="kv-value">10 consecutive clean</span>
+                    </div>
+                </div>
+            </div>
 
-        // Function to update chart data
-        function updateChart(chart, newData) {
-            chart.data.labels.push(''); // Add blank label to advance X axis
-            chart.data.datasets[0].data.push(newData);
-            if (chart.data.labels.length > 30) {
-                chart.data.labels.shift();
-                chart.data.datasets[0].data.shift();
+            <div class="card">
+                <div class="card-header">
+                    <div>
+                        <div class="card-title">Model Configuration</div>
+                        <div class="card-subtitle">Active classifier details</div>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="kv-row">
+                        <span class="kv-label">Algorithm</span>
+                        <span class="kv-value">Random Forest</span>
+                    </div>
+                    <div class="kv-row">
+                        <span class="kv-label">Trees</span>
+                        <span class="kv-value">100</span>
+                    </div>
+                    <div class="kv-row">
+                        <span class="kv-label">Max Depth</span>
+                        <span class="kv-value">12</span>
+                    </div>
+                    <div class="kv-row">
+                        <span class="kv-label">Features</span>
+                        <span class="kv-value">5 (PMU + IMC)</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card" style="margin-top: 20px;">
+            <div class="card-header">
+                <div>
+                    <div class="card-title">Latest Telemetry Sample</div>
+                    <div class="card-subtitle">Raw JSON payload from daemon</div>
+                </div>
+            </div>
+            <div class="card-body">
+                <pre class="code-block" id="latestSample">{
+  "ipc": 0,
+  "mbps": 0,
+  "llc_misses": 0,
+  "is_attack": 0,
+  "confidence": 0,
+  "mitigation_active": false
+}</pre>
+            </div>
+        </div>
+    </div>
+
+</main>
+
+<script>
+// ============================================================
+// Helpers
+// ============================================================
+const $ = (id) => document.getElementById(id);
+
+// ============================================================
+// Tabs
+// ============================================================
+document.querySelectorAll('.tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        tab.classList.add('active');
+        $('tab-' + tab.dataset.tab).classList.add('active');
+    });
+});
+
+// ============================================================
+// Charts
+// ============================================================
+function getChartOptions(color) {
+    return {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: { duration: 250 },
+        interaction: { mode: 'nearest', axis: 'x', intersect: false },
+        plugins: {
+            legend: { display: false },
+            tooltip: {
+                backgroundColor: '#1e293b',
+                titleFont: { family: 'Inter', size: 12, weight: 600 },
+                bodyFont:  { family: 'Inter', size: 12 },
+                padding: 10,
+                cornerRadius: 8,
+                displayColors: false,
             }
-            chart.update();
-        }
-
-        // Listen for Telemetry from Python Daemon
-        socket.on('update_dashboard', function(data) {
-            updateChart(mbpsChart, data.mbps);
-            updateChart(llcChart, data.llc_misses);
-            updateChart(ipcChart, data.ipc);
-
-            // Update UI Status Banner
-            const banner = document.getElementById('statusBanner');
-            if (data.is_attack === 1) {
-                banner.className = 'status-banner attack mb-4';
-                banner.innerText = '[!] WARNING: NOISY-NEIGHBOR DETECTED! Deploying Intel RDT Mitigation...';
-            } else {
-                banner.className = 'status-banner stable mb-4';
-                banner.innerText = '[✓] SYSTEM STABLE: No Interference Detected';
+        },
+        scales: {
+            x: { display: false },
+            y: {
+                beginAtZero: true,
+                grid: { color: '#f1f5f9', drawBorder: false },
+                ticks: {
+                    color: '#94a3b8',
+                    font: { family: 'Inter', size: 11 },
+                    padding: 6,
+                }
             }
-        });
-    </script>
+        },
+        elements: { point: { radius: 0, hoverRadius: 4 } }
+    };
+}
+
+function gradient(ctx, color) {
+    const gradient = ctx.createLinearGradient(0, 0, 0, 200);
+    gradient.addColorStop(0, color + '55');
+    gradient.addColorStop(1, color + '00');
+    return gradient;
+}
+
+function makeAreaChart(id, color) {
+    const canvas = document.getElementById(id);
+    const ctx = canvas.getContext('2d');
+    return new Chart(canvas, {
+        type: 'line',
+        data: {
+            labels: [],
+            datasets: [{
+                data: [],
+                borderColor: color,
+                backgroundColor: gradient(ctx, color),
+                borderWidth: 2.5,
+                fill: true,
+                tension: 0.35,
+            }]
+        },
+        options: getChartOptions(color),
+    });
+}
+
+const mbpsChart     = makeAreaChart('mbpsChart',     '#3b82f6');
+const llcChart      = makeAreaChart('llcChart',      '#f59e0b');
+const ipcChart      = makeAreaChart('ipcChart',      '#10b981');
+
+const recoveryChart = new Chart($('recoveryChart'), {
+    type: 'bar',
+    data: { labels: [], datasets: [{ data: [], backgroundColor: [], borderRadius: 6 }] },
+    options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+            x: { grid: { display: false }, ticks: { color: '#94a3b8' } },
+            y: {
+                beginAtZero: true,
+                grid: { color: '#f1f5f9' },
+                ticks: { color: '#94a3b8', callback: v => v + '%' }
+            }
+        }
+    }
+});
+
+function pushPoint(chart, value, maxLen = 60) {
+    chart.data.labels.push('');
+    chart.data.datasets[0].data.push(value);
+    if (chart.data.labels.length > maxLen) {
+        chart.data.labels.shift();
+        chart.data.datasets[0].data.shift();
+    }
+    chart.update('none');
+}
+
+// ============================================================
+// Counters
+// ============================================================
+let sampleCount = 0, alarmCount = 0, mitigationCount = 0, releaseCount = 0;
+
+function refreshStats() {
+    $('statTotalSamples').textContent = sampleCount.toLocaleString();
+    $('statTotalAlarms').textContent  = alarmCount.toLocaleString();
+    $('statMitigations').textContent  = mitigationCount.toLocaleString();
+    $('statReleases').textContent     = releaseCount.toLocaleString();
+}
+
+// ============================================================
+// Banner / Event Log
+// ============================================================
+const STATUS_PRESETS = {
+    stable: {
+        title:   'System Stable',
+        message: 'No interference detected — all workloads running normally',
+        icon:    '✓'
+    },
+    alarm: {
+        title:   'Anomaly Detected',
+        message: 'ML classifier flagged interference — building consensus',
+        icon:    '⚠'
+    },
+    mitigating: {
+        title:   'Mitigation Active',
+        message: 'Intel CAT/MBA enforcing cache partitioning on aggressor core',
+        icon:    '🛡'
+    },
+};
+
+function setBanner(state, customMessage) {
+    const banner = $('statusBanner');
+    const preset = STATUS_PRESETS[state];
+    banner.className = 'status-banner ' + state;
+    banner.querySelector('.status-icon').textContent = preset.icon;
+    $('statusTitle').textContent = preset.title;
+    $('statusMessage').textContent = customMessage || preset.message;
+}
+
+function addEvent(klass, html) {
+    const log = $('eventLog');
+    if (log.querySelector('.empty-state')) log.innerHTML = '';
+    const item = document.createElement('div');
+    item.className = 'event-item ' + klass;
+    const ts = new Date().toLocaleTimeString();
+    item.innerHTML = `
+        <div class="event-marker"></div>
+        <div class="event-body">
+            <div class="event-time">${ts}</div>
+            <div class="event-text">${html}</div>
+        </div>`;
+    log.insertBefore(item, log.firstChild);
+    while (log.childElementCount > 100) log.removeChild(log.lastChild);
+}
+
+// ============================================================
+// Socket.IO
+// ============================================================
+const socket = io();
+
+socket.on('connect', () => {
+    const pill = $('connectionStatus');
+    pill.classList.remove('disconnected');
+    pill.querySelector('span:last-child').textContent = 'Connected';
+});
+
+socket.on('disconnect', () => {
+    const pill = $('connectionStatus');
+    pill.classList.add('disconnected');
+    pill.querySelector('span:last-child').textContent = 'Disconnected';
+});
+
+socket.on('update_dashboard', (data) => {
+    sampleCount++;
+    if (data.is_attack === 1) alarmCount++;
+    refreshStats();
+
+    // Stat cards
+    $('statIPC').textContent  = (data.ipc || 0).toFixed(2);
+    $('statMB').textContent   = Math.round(data.mbps || 0).toLocaleString();
+    $('statLLC').textContent  = Math.round(data.llc_misses || 0).toLocaleString();
+    $('statConf').textContent = Math.round((data.confidence || 0) * 100);
+
+    // Charts
+    pushPoint(mbpsChart, data.mbps);
+    pushPoint(llcChart,  data.llc_misses);
+    pushPoint(ipcChart,  data.ipc);
+
+    // Banner
+    if (data.mitigation_active) {
+        setBanner('mitigating');
+    } else if (data.is_attack === 1) {
+        const c = Math.round((data.confidence || 0) * 100);
+        setBanner('alarm', `ML classifier confidence: ${c}% — collecting samples for hysteresis decision`);
+    } else {
+        setBanner('stable');
+    }
+
+    // Inspector
+    $('latestSample').textContent = JSON.stringify(data, null, 2);
+    const hyst = $('hystActive');
+    if (data.mitigation_active) {
+        hyst.textContent = 'Active';
+        hyst.classList.add('active');
+    } else {
+        hyst.textContent = 'Inactive';
+        hyst.classList.remove('active');
+    }
+    $('hystSamples').textContent = (data.sample_count || sampleCount).toLocaleString();
+});
+
+socket.on('mitigation_event', (data) => {
+    if (data.phase === 'starting') {
+        mitigationCount++;
+        refreshStats();
+        addEvent('trigger',
+            `<strong>Mitigation triggered</strong> — aggressor identified on core <strong>${data.aggressor_core}</strong>`);
+        setBanner('mitigating', `Applying CAT/MBA isolation to core ${data.aggressor_core}…`);
+
+    } else if (data.phase === 'result') {
+        const klass = data.status;
+        const sym = klass === 'effective' ? '✓' : klass === 'partial' ? '~' : '✗';
+        addEvent(klass,
+            `Mitigation result: <strong>${data.status.toUpperCase()}</strong> — ` +
+            `IPC ${data.before_ipc.toFixed(2)} → ${data.after_ipc.toFixed(2)} ` +
+            `(recovery <strong>${data.recovery_percent.toFixed(1)}%</strong>)`);
+
+        recoveryChart.data.labels.push('M' + (mitigationCount));
+        recoveryChart.data.datasets[0].data.push(data.recovery_percent);
+        const color = klass === 'effective' ? '#10b981'
+                    : klass === 'partial'   ? '#f59e0b'
+                    : '#ef4444';
+        recoveryChart.data.datasets[0].backgroundColor.push(color);
+        if (recoveryChart.data.labels.length > 20) {
+            recoveryChart.data.labels.shift();
+            recoveryChart.data.datasets[0].data.shift();
+            recoveryChart.data.datasets[0].backgroundColor.shift();
+        }
+        recoveryChart.update();
+
+    } else if (data.phase === 'released') {
+        releaseCount++;
+        refreshStats();
+        addEvent('released',
+            `<strong>Mitigation released</strong> — system stable for 10 consecutive samples`);
+        setBanner('stable');
+    }
+});
+
+</script>
 </body>
 </html>
