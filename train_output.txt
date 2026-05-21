@@ -1,0 +1,108 @@
+======================================================================
+  Noisy-Neighbor Detection Model Training (v2)
+  Multi-Signal Labeling
+======================================================================
+[*] 160 CSV dosyası birleştiriliyor...
+[+] Birleştirme tamamlandı: 86720 toplam sample.
+[+] (victim, attacker) dağılımı:
+    mcf                  vs STREAM              :   5504
+    mcf                  vs mcf-attacker        :   5498
+    mcf                  vs none                :   5527
+    mcf                  vs stress-ng           :   5222
+    redis-benchmark      vs STREAM              :   5454
+    redis-benchmark      vs mcf-attacker        :   5417
+    redis-benchmark      vs none                :   5503
+    redis-benchmark      vs stress-ng           :   5191
+    sysbench             vs STREAM              :   5496
+    sysbench             vs mcf-attacker        :   5504
+    sysbench             vs none                :   5466
+    sysbench             vs stress-ng           :   5248
+    x264                 vs STREAM              :   5481
+    x264                 vs mcf-attacker        :   5497
+    x264                 vs none                :   5485
+    x264                 vs stress-ng           :   5227
+[+] Dataset → master_dataset.csv
+
+[*] Baseline IPC (solo run medianları):
+    mcf                  IPC = 0.2222 (n=5527)
+    redis-benchmark      IPC = 0.7068 (n=5503)
+    sysbench             IPC = 0.4477 (n=5466)
+    x264                 IPC = 2.0750 (n=5485)
+
+[+] Baselines → baseline_ipc.pkl
+
+[*] Multi-signal labeling:
+    Threshold IPC drop: >5%
+    Threshold MB/s:     >500
+    Threshold LLC miss: >20000
+
+[+] Class balance:
+    Normal (0):        21981 (25.3%)
+    Interference (1):  64739 (74.7%)
+
+[*] 5 feature: ['IPC', 'Total_MB_per_sec', 'cache_dominance_score', 'LLC-load-misses', 'LLC-loads']
+
+[*] Train/Test split: 69376 eğitim, 17344 test
+
+[*] BASELINE: Logistic Regression...
+    LR F1 = 0.9921
+
+[*] PRIMARY: Random Forest...
+
+[+] Random Forest Metrikleri:
+    F1:        0.9995
+    Precision: 0.9993
+    Recall:    0.9997
+    ROC-AUC:   1.0000
+
+[!] F1 > 0.99 — class'lar trivially ayrılıyor olabilir.
+    Bu bizim durumumuzda OK: features (MB/s, miss) doğal olarak
+    co-located runs'da çok yüksek, solo runs'da çok düşük.
+
+[+] Confusion Matrix:
+                  Predicted Normal   Predicted Attack
+    Actual Normal       4387                   9
+    Actual Attack          4               12944
+
+[+] Detaylı Rapor:
+              precision    recall  f1-score   support
+
+      Normal     0.9991    0.9980    0.9985      4396
+Interference     0.9993    0.9997    0.9995     12948
+
+    accuracy                         0.9993     17344
+   macro avg     0.9992    0.9988    0.9990     17344
+weighted avg     0.9993    0.9993    0.9993     17344
+
+
+[*] 5-fold CV...
+/home/lenovo/.local/lib/python3.12/site-packages/sklearn/utils/validation.py:2684: UserWarning: X has feature names, but RandomForestClassifier was fitted without feature names
+  warnings.warn(
+/home/lenovo/.local/lib/python3.12/site-packages/sklearn/utils/validation.py:2684: UserWarning: X has feature names, but RandomForestClassifier was fitted without feature names
+  warnings.warn(
+    CV F1 ortalama: 0.9996 (± 0.0002)
+
+[+] Feature Importance:
+    Total_MB_per_sec          46.22%  ███████████████████████
+    LLC-load-misses           16.96%  ████████
+    cache_dominance_score     16.43%  ████████
+    LLC-loads                 13.34%  ██████
+    IPC                        7.05%  ███
+
+[*] Live ortam test örnekleri:
+    Solo stable      (IPC=1.5,   MB/s=10):    pred=0, prob=0.011
+    Co-located mild  (IPC=0.68,  MB/s=6527):  pred=0, prob=0.363
+    Heavy attack     (IPC=0.20,  MB/s=20135): pred=1, prob=0.540
+
+[+] Model → rf_model.pkl
+
+======================================================================
+  EĞİTİM TAMAMLANDI
+======================================================================
+  RF F1:       0.9995
+  CV F1:       0.9996 (± 0.0002)
+  LR baseline: 0.9921
+  Precision:   0.9993
+  Recall:      0.9997
+  ROC-AUC:     1.0000
+======================================================================
