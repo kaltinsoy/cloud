@@ -1,154 +1,51 @@
-```markdown
-# Project: Noisy-Neighbor Detection & Active Defense (Closed-Loop Prototype)
+# Koray — sunucuda koşulacak 4 deney (hakem geri bildirimi için)
 
-**Authors:** Anıl Koray Altınsoy & Kazım Önses  
-**Course:** Cloud Computing (Level 2)  
-**Target Hardware:** Intel Xeon Gold 6136 (Skylake-SP)  
+Paper'ı hakeme karşı sağlamlaştırmak için 4 ölçüm. **1 ve 2 şart**, 3 çok değerli (ilk sonuç figürü), 4 opsiyonel.
+Hepsi tek NUMA node 0'da (victim core 0, aggressor core 1–5), mevcut `mitigation_shield.py` + `perf` ile çalışır — telemetry.py'deki ölçüm desenini birebir kullanıyor.
 
-## Overview
-This repository contains a full closed-loop ML-based system for detecting and mitigating "Noisy-Neighbor" (cache/memory bandwidth contention) attacks in cloud environments. The system continuously monitors CPU performance counters, detects interference using a trained Random Forest classifier, and automatically applies Intel RDT CAT (Cache Allocation Technology) to isolate the aggressor.
-
-A live web dashboard (Flask + Socket.IO) visualizes telemetry, detected events, ML confidence, and mitigation effectiveness in real time.
-
-## Key Features & v3 Updates
-* **Hardware Erratum Workaround:** Due to Intel SKX114 Erratum (CMT/MBM disabled), we monitor per-core `perf_event` PMU counters (IPC, LLC misses) and system-wide Uncore IMC counters (MB/s) as a highly accurate proxy.
-* **Smart Baseline Labeling:** The model triggers an attack **only** if the victim suffers a >20% IPC drop from its specific baseline. High cache misses alone do not trigger false positives if the workload naturally generates them (e.g., `mcf`).
-* **Concurrent Live Daemon:** The `live_daemon.py` (v3) uses concurrent subprocesses and a 1-second sampling window (scaled to 100ms) to bypass Linux `perf` initialization overhead, ensuring highly accurate real-time data feeding to the ML model.
-* **Hysteresis State Machine:** K=3 (trigger) and M=10 (release) filters prevent mitigation oscillation.
+## Ön-koşullar
+- Dosyaları `mitigation_shield.py`'nin olduğu dizine koy (server: muhtemelen `~/cloud2/`).
+- Her scriptin başındaki **CONFIG** bloğunda `STREAM` (ve gerekiyorsa `MCF`) yolunu kendi binary'lerine göre düzelt.
+  - `MCF=/usr/local/bin/mcf` (MemBench) — sende doğruysa dokunma.
+  - `STREAM=...` — STREAM binary'nin tam yolu (örn. `~/cloud2/stream` ya da `/usr/local/bin/stream`).
+- `perf` ve mitigation için **root** gerekiyor (`sudo`).
+- Başlamadan önce temiz durum: `sudo python3 -c "import mitigation_shield as m; m.reset_all()"`
 
 ---
 
-## Repository Structure
-
-```text
-.
-├── app.py                       # Flask + Socket.IO backend for Web Dashboard
-├── live_daemon.py               # Main detection + mitigation loop (v3 Concurrent)
-├── telemetry.py                 # Offline perf data collection for training
-├── train_model.py               # Model training (IPC-drop labeling)
-├── feature_engineering.py       # Rolling window features, aggressor detection
-├── mitigation_shield.py         # Intel pqos CAT/MBA wrapper
-├── mitigation_verification.py   # Before/after IPC comparison logic
-├── run_experiments.sh           # 4x4x10 Matrix Runner (Fixed subshell blocking)
-├── templates/index.html         # 4-view dashboard UI (HTML/JS)
-└── STREAM/stream_c.exe          # Compiled STREAM benchmark
+## DENEY 1 — Redis tail latency (p99)  ★ŞART
+**Neden:** Paper Redis'i sadece IPC ile ölçüyor (zayıf proxy → "ineffective" görünüyor). p99 latency + throughput gerçek SLO metriği; ölü Redis satırlarını anlamlı sonuca çevirir.
+```bash
+bash exp1_redis_tail.sh
 ```
+**Gönder:** `redis_A_solo.txt`, `redis_B_attacked.txt`, `redis_C_mitigated.txt`
+(her dosyada "requests per second" + p99 içeren "Latency by percentile distribution" tablosu var)
+
+## DENEY 2 — Aggressor taraması 0→6 core  ★ŞART
+**Neden:** Headline "+81.6%" tek noktadan geliyor. 0–6 saldırgan için victim IPC + bellek bandwidth eğrisi "doygunluk dizini"ni (knee) gösterir → "single vs multi" (2 nokta) yerine "intensity'ye koşullu" iddiasını kanıtlar.
+```bash
+sudo python3 exp2_sweep.py
+```
+**Gönder:** `sweep.csv`  (kolonlar: n_aggressors, victim_ipc, mem_bw_GBps, llc_load_misses, llc_loads)
+
+## DENEY 3 — IPC zaman serisi (sonuç figürü)  ◇çok değerli
+**Neden:** Paper'da Tablo II'yi canlandıran hiçbir grafik yok. Bir tam döngüde (saldırı→mitigation→release) victim IPC'sinin çöküp toparlanması = en güçlü görsel.
+```bash
+sudo python3 exp3_timeseries.py
+```
+**Gönder:** `ts_raw.csv`  (faz offsetleri sabit: attack=8s, mitigate=20s, release=35s — script yazdırır)
+
+## DENEY 4 — Blind-mitigation maliyeti  ○opsiyonel
+**Neden:** Tezin temeli "gereksiz mitigation zarar verir" ama bu zarar hiç ölçülmemiş. Tek saldırganda (zarar yokken) mitigation uygulayıp aggressor throughput'unun düştüğünü, victim'in hiçbir şey kazanmadığını gösterir.
+```bash
+sudo python3 exp4_blind_cost.py | tee blind_cost.txt
+```
+**Gönder:** `blind_cost.txt` (ya da ekrandaki BEFORE/AFTER tablosu)
 
 ---
 
-## 1. Prerequisites & Setup
-
-Run the following commands to configure your environment, compile necessary benchmarks, and generate dummy workloads.
-
-### Install System Packages
-```bash
-sudo apt-get update
-sudo apt-get install -y linux-tools-common linux-tools-generic \
-                        intel-cmt-cat python3 python3-pip python3-venv \
-                        sysbench stress-ng redis-tools x264 ffmpeg
-```
-
-### Compile STREAM Benchmark
-```bash
-mkdir -p ~/cloud2/STREAM
-wget https://raw.githubusercontent.com/jeffhammond/STREAM/master/stream.c -O ~/cloud2/STREAM/stream.c
-gcc -O2 -fopenmp ~/cloud2/STREAM/stream.c -o ~/cloud2/STREAM/stream_c.exe
-```
-
-### Create Dummy Workloads (mcf & x264 video)
-Because SPEC CPU `mcf` is proprietary, we use a C program that mimics its heavy L3 cache-thrashing behavior.
-```bash
-# 1. Create test video for x264
-ffmpeg -f lavfi -i testsrc=duration=30:size=1280x720:rate=30 -pix_fmt yuv420p /tmp/test_video.y4m -y
-
-# 2. Create mcf_dummy.c
-cat << 'EOF' > ~/cloud2/mcf_dummy.c
-#include <stdio.h>
-#include <stdlib.h>
-int main(int argc, char *argv[]) {
-    size_t size = (256 * 1024 * 1024) / sizeof(int);
-    volatile int *data = (int *)malloc(size * sizeof(int));
-    if (!data) return 1;
-    for (size_t i = 0; i < size; i++) data[i] = i;
-    for (size_t i = 0; i < size * 5; i++) data[(i * 1009) % size] += 1;
-    free((void*)data);
-    return 0;
-}
-EOF
-
-# Compile and move mcf
-gcc -O3 ~/cloud2/mcf_dummy.c -o ~/cloud2/mcf
-sudo mv ~/cloud2/mcf /usr/local/bin/mcf
-touch ~/cloud2/inp.in
-```
-
-### Setup Python Environment
-```bash
-cd ~/cloud2
-python3 -m venv telemetry_env
-source telemetry_env/bin/activate
-pip install flask flask-socketio "python-socketio[client]" scikit-learn pandas numpy joblib
-```
-
----
-
-## 2. Training the Machine Learning Model
-
-### Step 2.1: Run the Experiment Matrix (Data Collection)
-Collect training data across 4 victims and 4 attackers (10 runs each = 160 experiments). This takes ~70-90 minutes.
-```bash
-sudo bash run_experiments.sh
-```
-
-### Step 2.2: Train the Model
-Train the Random Forest model based on the generated CSV files.
-```bash
-python3 train_model.py
-```
-*Expected Output: Model F1 Score should be between 0.95 and 0.99 with no label leakage. Model saves as `rf_model.pkl`.*
-
----
-
-## 3. Live Demonstration (Closed-Loop Defense)
-
-To run the live demo, open 4 separate terminal windows (or use `tmux`/`screen`).
-
-### Terminal 1: Start Web Dashboard
-```bash
-cd ~/cloud2
-python3 app.py
-```
-*Open your browser and navigate to `http://<your-server-ip>:5000` to view the dashboard.*
-
-### Terminal 2: Start the Live Defense Daemon
-```bash
-cd ~/cloud2
-sudo python3 live_daemon.py
-```
-*This daemon continuously monitors the system. If it detects an attack via the ML model, it dynamically isolates the aggressor core using Intel CAT.*
-
-### Terminal 3 & 4: The "Brutal Combo" Test
-To trigger a guaranteed Noisy-Neighbor event, run a high-IPC innocent workload alongside a heavy memory bandwidth attacker.
-
-**Terminal 3 (Innocent Victim):**
-```bash
-while true; do numactl --physcpubind=0 redis-benchmark -t set,get -n 100000000 -q > /dev/null 2>&1; done
-```
-
-**Terminal 4 (Aggressor):**
-```bash
-while true; do numactl --physcpubind=1 ~/cloud2/STREAM/stream_c.exe > /dev/null 2>&1; done
-```
-
-### Expected Behavior on Dashboard
-1. The **Victim IPC** (green chart) will crash instantly.
-2. The **Memory Bandwidth** (blue chart) and **LLC Misses** (yellow chart) will skyrocket.
-3. The **ML Confidence** (purple chart) will jump to 90-100%.
-4. After 3 seconds, the Daemon triggers **Mitigation** (CAT isolation on Core 1).
-5. The Victim IPC will recover automatically (Recovery % is logged in Terminal 2 and Dashboard Event Log).
-
----
-
-## Note on ML Model Intelligence (The MCF scenario)
-If you run `mcf` as the victim instead of `redis-benchmark`, the ML Confidence will stay at **0%** despite massive Cache Misses and MB/s. This is **intentional**. The ML model learned that `mcf` has a naturally low baseline IPC. Since its IPC does not drop further, the model correctly identifies that no performance degradation is happening to the victim, proving the AI does not just trigger on high RAM usage, but on actual victim starvation.
-```
+## Notlar
+- Scriptler kendi temizliğini yapar (aggressor + victim öldürülür, mitigation reset edilir). Yine de bir deney yarıda kalırsa: `sudo python3 -c "import mitigation_shield as m; m.reset_all()"; pkill -f stream; pkill -f mcf`
+- DENEY 2/3 victim'i (mcf) sürekli döngüde koşturur (`while true`), `perf -C 0` core'u ölçer — hangi process olduğu önemli değil.
+- Bir şey event-name hatası verirse (`uncore_imc_*`): `perf list | grep cas_count` ile sendeki tam isme bakıp scriptteki `IMC_EVENTS`/`uncore_imc_{i}` desenini ona göre düzelt (telemetry.py ile aynı, çalışması lazım).
+- Hepsini koşmak ~15–20 dk. Çıktı dosyalarını bana yolla, ben paper'a işleyip figürleri üretirim.

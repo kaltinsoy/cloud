@@ -40,7 +40,7 @@ class MitigationVerifier:
     observer: çağrıldığında {'IPC': float, ...} dict döndüren callable
     """
 
-    def __init__(self, observer, samples_per_phase=3, sample_interval=1.0):
+    def __init__(self, observer, samples_per_phase=7, sample_interval=1.0):
         """
         Args:
             observer: () -> dict, sistem ölçümü yapan fonksiyon

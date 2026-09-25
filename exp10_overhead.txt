@@ -1,0 +1,166 @@
+[*] Cores [1,2,3,4,5] → 'strangulate' (COS1)
+    LLC mask: 0x003, MBA: 20%
+[✓] 5 core → COS1 bağlandı.
+[✓] Core 1 → COS1 (beklenen COS1)
+[*] Core 0 → COS0 (baseline) atanıyor
+[✓] Core 0 baseline'a (COS0) döndü.
+[*] Core 1 → COS0 (baseline) atanıyor
+[✓] Core 1 baseline'a (COS0) döndü.
+[*] Core 2 → COS0 (baseline) atanıyor
+[✓] Core 2 baseline'a (COS0) döndü.
+[*] Core 3 → COS0 (baseline) atanıyor
+[✓] Core 3 baseline'a (COS0) döndü.
+[*] Core 4 → COS0 (baseline) atanıyor
+[✓] Core 4 baseline'a (COS0) döndü.
+[*] Core 5 → COS0 (baseline) atanıyor
+[✓] Core 5 baseline'a (COS0) döndü.
+[*] Cores [1,2,3,4,5] → 'strangulate' (COS1)
+    LLC mask: 0x003, MBA: 20%
+[✓] 5 core → COS1 bağlandı.
+[✓] Core 1 → COS1 (beklenen COS1)
+[*] Core 0 → COS0 (baseline) atanıyor
+[✓] Core 0 baseline'a (COS0) döndü.
+[*] Core 1 → COS0 (baseline) atanıyor
+[✓] Core 1 baseline'a (COS0) döndü.
+[*] Core 2 → COS0 (baseline) atanıyor
+[✓] Core 2 baseline'a (COS0) döndü.
+[*] Core 3 → COS0 (baseline) atanıyor
+[✓] Core 3 baseline'a (COS0) döndü.
+[*] Core 4 → COS0 (baseline) atanıyor
+[✓] Core 4 baseline'a (COS0) döndü.
+[*] Core 5 → COS0 (baseline) atanıyor
+[✓] Core 5 baseline'a (COS0) döndü.
+[*] Cores [1,2,3,4,5] → 'strangulate' (COS1)
+    LLC mask: 0x003, MBA: 20%
+[✓] 5 core → COS1 bağlandı.
+[✓] Core 1 → COS1 (beklenen COS1)
+[*] Core 0 → COS0 (baseline) atanıyor
+[✓] Core 0 baseline'a (COS0) döndü.
+[*] Core 1 → COS0 (baseline) atanıyor
+[✓] Core 1 baseline'a (COS0) döndü.
+[*] Core 2 → COS0 (baseline) atanıyor
+[✓] Core 2 baseline'a (COS0) döndü.
+[*] Core 3 → COS0 (baseline) atanıyor
+[✓] Core 3 baseline'a (COS0) döndü.
+[*] Core 4 → COS0 (baseline) atanıyor
+[✓] Core 4 baseline'a (COS0) döndü.
+[*] Core 5 → COS0 (baseline) atanıyor
+[✓] Core 5 baseline'a (COS0) döndü.
+[*] Cores [1,2,3,4,5] → 'strangulate' (COS1)
+    LLC mask: 0x003, MBA: 20%
+[✓] 5 core → COS1 bağlandı.
+[✓] Core 1 → COS1 (beklenen COS1)
+[*] Core 0 → COS0 (baseline) atanıyor
+[✓] Core 0 baseline'a (COS0) döndü.
+[*] Core 1 → COS0 (baseline) atanıyor
+[✓] Core 1 baseline'a (COS0) döndü.
+[*] Core 2 → COS0 (baseline) atanıyor
+[✓] Core 2 baseline'a (COS0) döndü.
+[*] Core 3 → COS0 (baseline) atanıyor
+[✓] Core 3 baseline'a (COS0) döndü.
+[*] Core 4 → COS0 (baseline) atanıyor
+[✓] Core 4 baseline'a (COS0) döndü.
+[*] Core 5 → COS0 (baseline) atanıyor
+[✓] Core 5 baseline'a (COS0) döndü.
+[*] Cores [1,2,3,4,5] → 'strangulate' (COS1)
+    LLC mask: 0x003, MBA: 20%
+[✓] 5 core → COS1 bağlandı.
+[✓] Core 1 → COS1 (beklenen COS1)
+[*] Core 0 → COS0 (baseline) atanıyor
+[✓] Core 0 baseline'a (COS0) döndü.
+[*] Core 1 → COS0 (baseline) atanıyor
+[✓] Core 1 baseline'a (COS0) döndü.
+[*] Core 2 → COS0 (baseline) atanıyor
+[✓] Core 2 baseline'a (COS0) döndü.
+[*] Core 3 → COS0 (baseline) atanıyor
+[✓] Core 3 baseline'a (COS0) döndü.
+[*] Core 4 → COS0 (baseline) atanıyor
+[✓] Core 4 baseline'a (COS0) döndü.
+[*] Core 5 → COS0 (baseline) atanıyor
+[✓] Core 5 baseline'a (COS0) döndü.
+[*] Cores [1,2,3,4,5] → 'strangulate' (COS1)
+    LLC mask: 0x003, MBA: 20%
+[✓] 5 core → COS1 bağlandı.
+[✓] Core 1 → COS1 (beklenen COS1)
+[*] Core 0 → COS0 (baseline) atanıyor
+[✓] Core 0 baseline'a (COS0) döndü.
+[*] Core 1 → COS0 (baseline) atanıyor
+[✓] Core 1 baseline'a (COS0) döndü.
+[*] Core 2 → COS0 (baseline) atanıyor
+[✓] Core 2 baseline'a (COS0) döndü.
+[*] Core 3 → COS0 (baseline) atanıyor
+[✓] Core 3 baseline'a (COS0) döndü.
+[*] Core 4 → COS0 (baseline) atanıyor
+[✓] Core 4 baseline'a (COS0) döndü.
+[*] Core 5 → COS0 (baseline) atanıyor
+[✓] Core 5 baseline'a (COS0) döndü.
+[*] Cores [1,2,3,4,5] → 'strangulate' (COS1)
+    LLC mask: 0x003, MBA: 20%
+[✓] 5 core → COS1 bağlandı.
+[✓] Core 1 → COS1 (beklenen COS1)
+[*] Core 0 → COS0 (baseline) atanıyor
+[✓] Core 0 baseline'a (COS0) döndü.
+[*] Core 1 → COS0 (baseline) atanıyor
+[✓] Core 1 baseline'a (COS0) döndü.
+[*] Core 2 → COS0 (baseline) atanıyor
+[✓] Core 2 baseline'a (COS0) döndü.
+[*] Core 3 → COS0 (baseline) atanıyor
+[✓] Core 3 baseline'a (COS0) döndü.
+[*] Core 4 → COS0 (baseline) atanıyor
+[✓] Core 4 baseline'a (COS0) döndü.
+[*] Core 5 → COS0 (baseline) atanıyor
+[✓] Core 5 baseline'a (COS0) döndü.
+[*] Cores [1,2,3,4,5] → 'strangulate' (COS1)
+    LLC mask: 0x003, MBA: 20%
+[✓] 5 core → COS1 bağlandı.
+[✓] Core 1 → COS1 (beklenen COS1)
+[*] Core 0 → COS0 (baseline) atanıyor
+[✓] Core 0 baseline'a (COS0) döndü.
+[*] Core 1 → COS0 (baseline) atanıyor
+[✓] Core 1 baseline'a (COS0) döndü.
+[*] Core 2 → COS0 (baseline) atanıyor
+[✓] Core 2 baseline'a (COS0) döndü.
+[*] Core 3 → COS0 (baseline) atanıyor
+[✓] Core 3 baseline'a (COS0) döndü.
+[*] Core 4 → COS0 (baseline) atanıyor
+[✓] Core 4 baseline'a (COS0) döndü.
+[*] Core 5 → COS0 (baseline) atanıyor
+[✓] Core 5 baseline'a (COS0) döndü.
+[*] Cores [1,2,3,4,5] → 'strangulate' (COS1)
+    LLC mask: 0x003, MBA: 20%
+[✓] 5 core → COS1 bağlandı.
+[✓] Core 1 → COS1 (beklenen COS1)
+[*] Core 0 → COS0 (baseline) atanıyor
+[✓] Core 0 baseline'a (COS0) döndü.
+[*] Core 1 → COS0 (baseline) atanıyor
+[✓] Core 1 baseline'a (COS0) döndü.
+[*] Core 2 → COS0 (baseline) atanıyor
+[✓] Core 2 baseline'a (COS0) döndü.
+[*] Core 3 → COS0 (baseline) atanıyor
+[✓] Core 3 baseline'a (COS0) döndü.
+[*] Core 4 → COS0 (baseline) atanıyor
+[✓] Core 4 baseline'a (COS0) döndü.
+[*] Core 5 → COS0 (baseline) atanıyor
+[✓] Core 5 baseline'a (COS0) döndü.
+[*] Cores [1,2,3,4,5] → 'strangulate' (COS1)
+    LLC mask: 0x003, MBA: 20%
+[✓] 5 core → COS1 bağlandı.
+[✓] Core 1 → COS1 (beklenen COS1)
+[*] Core 0 → COS0 (baseline) atanıyor
+[✓] Core 0 baseline'a (COS0) döndü.
+[*] Core 1 → COS0 (baseline) atanıyor
+[✓] Core 1 baseline'a (COS0) döndü.
+[*] Core 2 → COS0 (baseline) atanıyor
+[✓] Core 2 baseline'a (COS0) döndü.
+[*] Core 3 → COS0 (baseline) atanıyor
+[✓] Core 3 baseline'a (COS0) döndü.
+[*] Core 4 → COS0 (baseline) atanıyor
+[✓] Core 4 baseline'a (COS0) döndü.
+[*] Core 5 → COS0 (baseline) atanıyor
+[✓] Core 5 baseline'a (COS0) döndü.
+[1] RDT actuation+verify latency: median 104.7 ms (min 103.9, max 110.7, n=10, binding_ok=True)
+[2] RF inference latency: median 18.22 ms per window (n=200)
+[3] Telemetry: 68.4 ms CPU per 1 s sample (6.84% of one core); wall 1.036 s per sample (n=10)
+
+Derived: detection-to-enforcement = K x sampling + actuation = 3 x 1 s + 0.10 s ≈ 3.1 s
+Send: exp10_overhead.txt

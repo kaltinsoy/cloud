@@ -1,0 +1,29 @@
+[*] exp9 — MBA calibration sweep (solo STREAM on core 1)
+  unthrottled   BW =  13.13 GB/s   (100.0% of unthrottled)
+  MBA 90%       BW =  11.78 GB/s   ( 89.7% of unthrottled)
+  MBA 80%       BW =  11.83 GB/s   ( 90.1% of unthrottled)
+  MBA 70%       BW =  11.79 GB/s   ( 89.7% of unthrottled)
+  MBA 60%       BW =  10.80 GB/s   ( 82.2% of unthrottled)
+  MBA 50%       BW =   9.71 GB/s   ( 73.9% of unthrottled)
+  MBA 40%       BW =   8.82 GB/s   ( 67.1% of unthrottled)
+  MBA 30%       BW =   5.47 GB/s   ( 41.6% of unthrottled)
+  MBA 20%       BW =   4.08 GB/s   ( 31.0% of unthrottled)
+  MBA 10%       BW =   2.79 GB/s   ( 21.3% of unthrottled)
+  unthrottled   BW =  13.34 GB/s   (101.6% of unthrottled)
+
+===== MBA CALIBRATION TABLE =====
+level           GB/s  % of free
+unthrottled    13.13     100.0%
+MBA 90%        11.78      89.7%
+MBA 80%        11.83      90.1%
+MBA 70%        11.79      89.7%
+MBA 60%        10.80      82.2%
+MBA 50%         9.71      73.9%
+MBA 40%         8.82      67.1%
+MBA 30%         5.47      41.6%
+MBA 20%         4.08      31.0%
+MBA 10%         2.79      21.3%
+unthrottled    13.34     101.6%
+
+(Adjacent levels with ~equal BW = ineffective steps on this CPU.)
+Send: exp9_mba_calibration*.txt

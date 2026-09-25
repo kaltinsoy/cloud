@@ -1,0 +1,8 @@
+[*] Cores [1] → 'strangulate' (COS1)
+    LLC mask: 0x003, MBA: 20%
+[✓] 1 core → COS1 bağlandı.
+BEFORE (no mitigation):  victim IPC = 0.267   system BW =  14.5 GB/s
+AFTER  (strangulate):    victim IPC = 0.252   system BW =  14.3 GB/s
+
+Victim IPC change:           -5.5%   (~0  => mitigation gave the victim no benefit)
+Aggressor/system BW change:  -1.2%   (negative => throughput wasted by blind mitigation)

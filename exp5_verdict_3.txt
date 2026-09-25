@@ -1,0 +1,23 @@
+[6s] launching 5x STREAM
+[6s] phase: attacked
+[14s] phase: strangulate (CAT 0x003, MBA 20%)
+[24s] phase: attacked
+[32s] phase: mba20_nocat (CAT 0x7FF, MBA 20%)
+[42s] phase: attacked
+[50s] phase: mba10_nocat (CAT 0x7FF, MBA 10%)
+[60s] phase: attacked
+
+================= VERDICT =================
+phase             IPC(med)  BW(med GB/s)   recovery vs attacked
+baseline_alone       0.224          10.8                       
+attacked             0.067          36.1                       
+strangulate          0.136          30.1                +102.1%
+attacked             0.067          36.2                       
+mba20_nocat          0.132          30.1                 +97.3%
+attacked             0.067          36.2                       
+mba10_nocat          0.176          24.3                +161.4%
+attacked             0.067          36.2                       
+
+baseline (alone) IPC = 0.224.  A policy 'works' only if its IPC
+climbs toward 0.224 AND stays there (not a one-off spike).
+Send: exp5_verdict.txt, exp5_ipc.csv, exp5_bw.csv

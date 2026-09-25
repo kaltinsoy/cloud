@@ -1,0 +1,34 @@
+[6s] launching 5x STREAM
+[6s] attacked
+[14s] strangulate (CAT 0x003, MBA 20%)
+[24s] attacked
+[32s] mba20_nocat (CAT 0x7FF, MBA 20%)
+[42s] attacked
+[50s] strangulate_hard (CAT 0x003, MBA 10%)
+[60s] attacked
+[68s] mba10_nocat (CAT 0x7FF, MBA 10%)
+[78s] attacked
+
+===== 2x2 VERDICT  (cache x MBA) =====
+phase              victim%base   sysBW  aggr_missrate
+baseline_alone          100.0%    10.8          0.341
+attacked                 30.8%    36.1          0.942
+strangulate              61.7%    30.1          0.969
+attacked                 30.6%    36.2          0.941
+mba20_nocat              59.6%    30.1          0.961
+attacked                 30.3%    36.2          0.942
+strangulate_hard         81.2%    24.3          0.964
+attacked                 30.3%    36.1          0.944
+mba10_nocat              80.0%    24.4          0.963
+attacked                 30.7%    36.2          0.941
+
+--- CACHE EFFECT, MBA held fixed (this is the test) ---
+  @MBA20:  0x003=61.7%  vs  0x7FF=59.6%   (cache delta +2.1 pts)
+  @MBA10:  0x003=81.2%  vs  0x7FF=80.0%   (cache delta +1.2 pts)
+--- MECHANISM: does 0x003 raise the aggressor's LLC miss rate? ---
+  @MBA20:  0x003 miss=0.969  vs  0x7FF miss=0.961
+  @MBA10:  0x003 miss=0.964  vs  0x7FF miss=0.963
+
+If cache delta is ~0/positive at both MBA -> 'cache restriction is neutral, MBA is the lever'.
+If 0x003 clearly worse AND raises aggressor miss rate -> the 'cache backfires' claim is supported.
+Send: exp6_verdict.txt, exp6_ipc.csv, exp6_bw.csv, exp6_aggr.csv

@@ -1,0 +1,27 @@
+Noisy-Neighbor — MULTI-CORE Paper Results (REPS=5, attackers=1 2 3 4 5)
+Tarih: Fri Jun 12 19:39:20 UTC 2026
+Ayar: samples_per_phase=7, policy=strangulate, ATTACK_WAIT=35s
+============================================================
+SENARYO: mcf_vs_5xSTREAM
+  mitigation_result event sayisi: 5
+  Recovery (mean +/- std): +81.6% +/- 27.3%
+  Recovery (min / max):    +51.1% / +109.8%
+  Status: effective=5
+  Tekil event'ler:
+    IPC 0.080 -> 0.165   recovery +106.4%   [effective]
+    IPC 0.108 -> 0.162   recovery +51.1%   [effective]
+    IPC 0.108 -> 0.169   recovery +56.4%   [effective]
+    IPC 0.081 -> 0.171   recovery +109.8%   [effective]
+    IPC 0.105 -> 0.194   recovery +84.3%   [effective]
+============================================================
+SENARYO: redis_vs_5xSTREAM
+  mitigation_result event sayisi: 5
+  Recovery (mean +/- std): +3.7% +/- 0.4%
+  Recovery (min / max):    +3.0% / +4.1%
+  Status: ineffective=5
+  Tekil event'ler:
+    IPC 0.680 -> 0.706   recovery +3.9%   [ineffective]
+    IPC 0.687 -> 0.708   recovery +3.0%   [ineffective]
+    IPC 0.679 -> 0.707   recovery +4.1%   [ineffective]
+    IPC 0.682 -> 0.706   recovery +3.6%   [ineffective]
+    IPC 0.680 -> 0.707   recovery +3.9%   [ineffective]

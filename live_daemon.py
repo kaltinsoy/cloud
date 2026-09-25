@@ -1,45 +1,27 @@
 """
-Live Closed-Loop Detection & Mitigation Daemon
-================================================
+Live Closed-Loop Detection & Mitigation Daemon (v3 — REAL MITIGATION)
+=====================================================================
 
-Bu daemon her saniye sistemdeki performans sayaçlarını okur, makine
-öğrenmesi modeline danışır, hysteresis filtresinden geçirir ve
-gerekiyorsa Intel CAT/MBA ile otomatik mitigation uygular.
+Bu daemon her örnekte performans sayaçlarını okur, ML modeline danışır,
+hysteresis filtresinden geçirir ve gerekiyorsa Intel CAT/MBA ile otomatik
+mitigation uygular — ve uygulamanın GERÇEKTEN olduğunu doğrular.
 
-ÖNCEKİ HATALAR:
-  1. Hysteresis yoktu (anlık alarm → anlık mitigation → 10s sleep
-     → tekrar alarm → oscillation)
-  2. Aggressor core hardcoded "1" idi (dinamik bulma yoktu)
-  3. Mitigation verification yoktu (etkili mi bilmiyorduk)
-  4. dashboard.py dosyası live_daemon.py'nin %95 kopyasıydı
-     (artık tek dosya: bu)
-  5. Scaling math gereksizdi (1s ölçüp /10 ile çarpıp tekrar *10
-     yapıyorduk)
+v3'TE DÜZELTİLEN KRİTİK HATALAR:
+  1. mitigation_shield COS tanımlıyordu ama core'u ATAMIYORDU (-a yoktu).
+     → Mitigation hiç çalışmıyordu, recovery hep ~%0 çıkıyordu.
+     → Artık shield hem -e (tanım) hem -a (atama) yapıyor.
+  2. Daemon 'isolate' (sadece cache) kullanıyordu. STREAM bir BANDWIDTH
+     saldırısı; cache partition'ı bandwidth saldırısını durdurmaz.
+     → Artık 'strangulate' (cache 2-way + MBA %20) kullanıyor.
+  3. Daemon apply_policy'nin başarılı olup olmadığına bakmıyordu;
+     dashboard pqos başarısız olsa bile "MITIGATION ACTIVE" gösteriyordu.
+     → Artık dönüş değeri + verify_association ile gerçek durum gönderiliyor.
 
-YENİ TASARIM:
+ÖNCEKİ (v2) DÜZELTMELERİ (hâlâ geçerli):
   - Hysteresis: K=3 ardışık alarm → tetikle, M=10 ardışık temiz → kaldır
-  - Dynamic aggressor: hem core 0 hem core 1 izle, find_aggressor_core ile bul
-  - Mitigation verification: before/after IPC karşılaştır, recovery raporla
-  - Tek dosyada Socket.IO entegrasyonu (dashboard.py silinebilir)
-  - 100ms ölçüm (1s yerine), eğitim verisiyle uyumlu
-
-İŞ AKIŞI:
-  while True:
-      core0_metrics = perf -C 0 (100ms)
-      core1_metrics = perf -C 1 (100ms)
-      imc_metrics  = perf -a uncore_imc (100ms)
-      victim_features = engineer(victim_metrics + imc)
-      prediction = model.predict(victim_features)
-      hysteresis.update(prediction)
-      if hysteresis.should_trigger():
-          aggressor = find_aggressor_core({0: core0, 1: core1})
-          verifier.snapshot_before()
-          apply_mitigation(aggressor)
-          time.sleep(3)  # stabilize
-          result = verifier.snapshot_after_and_compare()
-          dashboard.emit(result)
-      if hysteresis.should_release():
-          reset_all_mitigation()
+  - Dynamic aggressor: find_aggressor_core ile bul
+  - Mitigation verification: before/after IPC, recovery raporla
+  - 100ms ölçüm (eğitim verisiyle uyumlu)
 """
 
 import time
@@ -82,6 +64,25 @@ DASHBOARD_URL = os.environ.get('DASHBOARD_URL', 'http://localhost:5000')
 
 # Verification: kaç saniye sonra ölçüm
 VERIFICATION_DELAY = 3.0
+
+# Before/after snapshot'ta kaç örnek ortalanacak.
+# Daha çok örnek = daha temiz mean±std (mcf gibi salınan workload'larda kritik).
+# Demo için 3'e düşürülebilir (dashboard daha az "donar"); paper verisi için 7.
+VERIFY_SAMPLES_PER_PHASE = 7
+
+# ============================================================
+# MITIGATION POLICY
+# ============================================================
+# 'strangulate' = cache 2-way (0x003) + MBA %20 → attacker'ı hem cache hem
+#   bandwidth'te boğar. Bandwidth saldırılarına (STREAM) karşı ŞART.
+# 'isolate'     = sadece cache 2-way, bandwidth dokunulmaz. Sadece cache
+#   kirletme saldırılarına (stress-ng --cache) karşı yeterli; STREAM'e değil.
+# Tespit edilen bir aggressor'a karşı güvenli evrensel seçim: strangulate.
+MITIGATION_POLICY = 'strangulate'
+
+# --- Dürüst durum bayrakları (dashboard'a gerçek durumu göndermek için) ---
+_binding_ok = False       # son mitigation core'a gerçekten bağlandı mı
+_active_policy = None      # şu an uygulanan policy adı (None = yok)
 
 
 # ============================================================
@@ -136,9 +137,6 @@ class HysteresisFilter:
 
         Returns:
             str: 'trigger', 'release', 'maintain'
-                 'trigger' = mitigation şimdi tetiklenmeli
-                 'release' = mitigation şimdi kaldırılmalı
-                 'maintain' = mevcut durumu koru
         """
         if prediction == 1:
             self.interference_count += 1
@@ -164,13 +162,7 @@ class HysteresisFilter:
 # Perf Ölçüm (per-core)
 # ============================================================
 def perf_core_snapshot(core_id, duration_ms=SAMPLE_INTERVAL_MS):
-    """
-    Belirli bir core için tek bir perf ölçümü yap (100ms).
-
-    Returns:
-        dict: {cycles, instructions, LLC-loads, LLC-load-misses}
-              Veya {} (başarısızsa)
-    """
+    """Belirli bir core için tek bir perf ölçümü (100ms)."""
     duration_sec = duration_ms / 1000.0
     cmd = [
         "sudo", "perf", "stat", "-x", ",",
@@ -186,7 +178,7 @@ def perf_core_snapshot(core_id, duration_ms=SAMPLE_INTERVAL_MS):
             text=True,
             timeout=duration_sec + 5,
         )
-        output = result.stderr  # perf stdout'a değil stderr'e basar
+        output = result.stderr  # perf stderr'e basar
     except subprocess.TimeoutExpired:
         return {}
 
@@ -211,13 +203,7 @@ def perf_core_snapshot(core_id, duration_ms=SAMPLE_INTERVAL_MS):
 
 
 def perf_uncore_snapshot(duration_ms=SAMPLE_INTERVAL_MS):
-    """
-    Sistem geneli uncore IMC ölçümü.
-
-    Returns:
-        float: toplam cas_count (tüm 6 kanal toplamı, ham byte cinsinden değil
-               CAS sayısı olarak — her CAS = 64 byte)
-    """
+    """Sistem geneli uncore IMC ölçümü (6 kanal cas_count toplamı)."""
     duration_sec = duration_ms / 1000.0
     cmd = [
         "sudo", "perf", "stat", "-x", ",", "-a",
@@ -252,7 +238,6 @@ def perf_uncore_snapshot(duration_ms=SAMPLE_INTERVAL_MS):
             unit = parts[1] if len(parts) > 1 else ''
             event = parts[2] if len(parts) > 2 else ''
 
-            # perf otomatik scale'i geri al
             if 'GiB' in unit:
                 val = (val * 1073741824) / 64
             elif 'MiB' in unit:
@@ -270,7 +255,7 @@ def perf_uncore_snapshot(duration_ms=SAMPLE_INTERVAL_MS):
 
 
 def cas_to_mb_per_sec(cas_count, duration_ms=SAMPLE_INTERVAL_MS):
-    """CAS count'u MB/s'e çevir. (Her CAS = 64 byte)."""
+    """CAS count → MB/s (her CAS = 64 byte)."""
     bytes_in_window = cas_count * 64
     mb_in_window = bytes_in_window / 1048576
     sec_in_window = duration_ms / 1000.0
@@ -281,18 +266,7 @@ def cas_to_mb_per_sec(cas_count, duration_ms=SAMPLE_INTERVAL_MS):
 # Sample Build (per-core + uncore)
 # ============================================================
 def observe_one_sample():
-    """
-    Tüm core'lar + uncore için bir snapshot al.
-
-    Returns:
-        dict: {
-            'cores': {0: {...}, 1: {...}},
-            'uncore_cas': float,
-            'mb_per_sec': float,
-            'victim_features': dict (model'e verilecek)
-        }
-    """
-    # Ölçümler — paralel olabilirdi ama subprocess kontrol için seri
+    """Tüm core'lar + uncore için bir snapshot al."""
     core_metrics = {}
     for c in ALL_CORES:
         core_metrics[c] = perf_core_snapshot(c)
@@ -300,7 +274,6 @@ def observe_one_sample():
     uncore_cas = perf_uncore_snapshot()
     mb_per_sec = cas_to_mb_per_sec(uncore_cas)
 
-    # Victim core (core 0) feature'larını model formatına dönüştür
     v = core_metrics[VICTIM_CORE]
     cycles = max(v.get('cycles', 1), 1)
     instructions = v.get('instructions', 0)
@@ -320,9 +293,8 @@ def observe_one_sample():
         'LLC-loads': llc_loads,
     }
 
-    # Core 1 (potansiyel aggressor) için de aynı şekilde aggressor_score için
     for core_id, m in core_metrics.items():
-        m['cas_count_total'] = uncore_cas / len(ALL_CORES)  # eşit pay (kabaca)
+        m['cas_count_total'] = uncore_cas / len(ALL_CORES)
 
     return {
         'cores': core_metrics,
@@ -333,15 +305,41 @@ def observe_one_sample():
 
 
 # ============================================================
+# Mitigation uygula + DOĞRULA (gerçekten bağlandı mı?)
+# ============================================================
+def apply_and_verify(aggressor, victim_core, policy_name):
+    """
+    Mitigation uygula ve gerçekten core'a bağlandığını doğrula.
+
+    Returns:
+        (applied: bool, binding_confirmed: bool)
+          applied           = pqos komutları hatasız döndü mü
+          binding_confirmed = pqos -s ile core→COS ataması teyit edildi mi
+    """
+    applied = mitigation_shield.apply_policy(
+        core_id=aggressor,
+        policy_name=policy_name,
+        victim_core=victim_core,
+    )
+    # verify_association: True / False / None(parse edilemedi)
+    verified = mitigation_shield.verify_association(
+        aggressor, mitigation_shield.ATTACKER_COS
+    )
+    binding_confirmed = (verified is True)
+    return applied, binding_confirmed
+
+
+# ============================================================
 # Ana Daemon Döngüsü
 # ============================================================
 def main():
+    global _binding_ok, _active_policy
+
     print("=" * 70)
-    print("  Noisy-Neighbor Live Daemon (Fixed)")
-    print("  Hysteresis + Dynamic Aggressor + Verification")
+    print("  Noisy-Neighbor Live Daemon (v3 — Real Mitigation)")
+    print("  Hysteresis + Dynamic Aggressor + Verified CAT/MBA")
     print("=" * 70)
 
-    # 1. Model yükle
     if not os.path.exists(MODEL_FILE):
         print(f"[-] Model bulunamadı: {MODEL_FILE}")
         print("    Önce 'python train_model.py' çalıştırın.")
@@ -350,7 +348,6 @@ def main():
     print(f"[*] Model yükleniyor: {MODEL_FILE}")
     model = joblib.load(MODEL_FILE)
 
-    # 2. Bileşenleri kur
     engineer = FeatureEngineer(window=ROLLING_WINDOW)
     hysteresis = HysteresisFilter(
         k_trigger=HYSTERESIS_TRIGGER,
@@ -358,12 +355,18 @@ def main():
     )
     verifier = MitigationVerifier(
         observer=lambda: observe_one_sample()['victim_features'],
-        samples_per_phase=3,
+        samples_per_phase=VERIFY_SAMPLES_PER_PHASE,
         sample_interval=1.0,
     )
 
-    print(f"[*] Hysteresis: trigger={HYSTERESIS_TRIGGER}, "
-          f"release={HYSTERESIS_RELEASE}")
+    print(f"[*] Hysteresis: trigger={HYSTERESIS_TRIGGER}, release={HYSTERESIS_RELEASE}")
+    print(f"[*] Mitigation policy: {MITIGATION_POLICY}")
+
+    # Önceki (çökmüş olabilecek) çalışmadan kalan mitigation'ları temizle
+    print("[*] Başlangıç temizliği: core'lar baseline'a (COS0) çekiliyor...")
+    for c in ALL_CORES:
+        mitigation_shield.reset_core(c)
+
     print(f"[*] Daemon başlatılıyor. Ctrl+C ile durdur.")
     print("=" * 70)
 
@@ -374,10 +377,8 @@ def main():
             obs = observe_one_sample()
             features = obs['victim_features']
 
-            # Rolling window'a ekle
             engineer.update(features)
 
-            # Model inference
             X = pd.DataFrame([{f: features[f] for f in BASE_FEATURES}])
             prediction = int(model.predict(X)[0])
             try:
@@ -385,10 +386,8 @@ def main():
             except Exception:
                 confidence = 0.0
 
-            # Hysteresis kararı
             decision = hysteresis.update(prediction)
 
-            # Status string
             status_symbol = '!' if prediction == 1 else '✓'
             print(
                 f"\r[{sample_count:>5d}] "
@@ -402,63 +401,80 @@ def main():
                 end='', flush=True,
             )
 
-            # Dashboard'a anlık veri gönder
+            # Dashboard'a anlık veri — mitigation_active artık GERÇEK durumu
+            # gösteriyor (hysteresis istedi + gerçekten bağlandı).
             dashboard_emit('telemetry_update', {
                 'ipc': features['IPC'],
                 'mbps': features['Total_MB_per_sec'],
                 'llc_misses': features['LLC-load-misses'],
                 'is_attack': prediction,
                 'confidence': confidence,
-                'mitigation_active': hysteresis.is_active,
+                'mitigation_active': hysteresis.is_active and _binding_ok,
+                'binding_confirmed': _binding_ok,
+                'active_policy': _active_policy,
                 'sample_count': sample_count,
             })
 
-            # Mitigation tetikleme
+            # --- Mitigation tetikleme ---
             if decision == 'trigger':
                 print(f"\n[!!] NOISY-NEIGHBOR ONAYLANDI "
                       f"({HYSTERESIS_TRIGGER} ardışık alarm)")
 
-                # 1. Aggressor'ı bul (dinamik!)
                 aggressor = find_aggressor_core(obs['cores'])
                 if aggressor is None or aggressor == VICTIM_CORE:
-                    print("[!] Aggressor tespit edilemedi, default core 1 kullanılıyor.")
+                    print("[!] Aggressor tespit edilemedi, default core 1.")
                     aggressor = 1
 
                 print(f"[*] Tespit edilen aggressor: core {aggressor}")
-                dashboard_emit('mitigation_starting', {'aggressor_core': aggressor})
+                dashboard_emit('mitigation_starting', {
+                    'aggressor_core': aggressor,
+                    'policy': MITIGATION_POLICY,
+                })
 
-                # 2. Before snapshot
+                # 1. Before snapshot (mitigation uygulanmadan önce)
                 print("[*] Before snapshot alınıyor...")
                 verifier.reset()
                 verifier.snapshot_before()
 
-                # 3. Mitigation uygula
-                print("[*] Mitigation uygulanıyor (isolate)...")
-                mitigation_shield.apply_policy(
-                    core_id=aggressor,
-                    policy_name='isolate',
-                    victim_core=VICTIM_CORE,
+                # 2. Mitigation uygula + GERÇEKTEN bağlandı mı doğrula
+                print(f"[*] Mitigation uygulanıyor ({MITIGATION_POLICY})...")
+                applied, _binding_ok = apply_and_verify(
+                    aggressor, VICTIM_CORE, MITIGATION_POLICY
                 )
+                _active_policy = MITIGATION_POLICY if (applied and _binding_ok) else None
 
-                # 4. Stabilize bekle
+                if applied and _binding_ok:
+                    print(f"[✓] CAT/MBA core {aggressor}'e bağlandı ve teyit edildi.")
+                elif applied:
+                    print(f"[~] pqos hatasız döndü ama atama teyit edilemedi (pqos -s parse).")
+                else:
+                    print(f"[✗] MITIGATION UYGULANAMADI — pqos/RDT hatası!")
+
+                # 3. Stabilize bekle
                 print(f"[*] {VERIFICATION_DELAY}s stabilize bekleniyor...")
                 time.sleep(VERIFICATION_DELAY)
 
-                # 5. After snapshot + karşılaştırma
+                # 4. After snapshot + karşılaştırma
                 result = verifier.snapshot_after_and_compare()
+                result['applied'] = applied
+                result['binding_confirmed'] = _binding_ok
+                result['policy'] = MITIGATION_POLICY
+                result['aggressor_core'] = aggressor
                 dashboard_emit('mitigation_result', result)
 
             elif decision == 'release':
                 print(f"\n[*] Sistem {HYSTERESIS_RELEASE} ardışık örnektir temiz "
                       "— mitigation kaldırılıyor.")
                 mitigation_shield.reset_all()
+                _binding_ok = False
+                _active_policy = None
                 dashboard_emit('mitigation_released', {})
 
             time.sleep(DAEMON_LOOP_SLEEP)
 
     except KeyboardInterrupt:
         print("\n\n[*] Kapatılıyor...")
-        if hysteresis.is_active:
+        if _binding_ok or hysteresis.is_active:
             print("[*] Aktif mitigation'lar geri alınıyor...")
             mitigation_shield.reset_all()
         if _sio is not None and _dashboard_connected:

@@ -1,10 +1,10 @@
 #!/bin/bash
 # ============================================================
-# Noisy-Neighbor Experiment Matrix Runner (v3 — command substitution fix)
+# Noisy-Neighbor Experiment Matrix Runner (v2 — path fix)
 # ============================================================
 #
-# v3 FIX: Background loops were holding stdout open, causing 
-#         command substitutions $(launch_victim) to hang indefinitely.
+# v2 FIX: Script kendi dizinini otomatik tespit eder
+#         (eskisi ~/cloud hardcoded kullanıyordu, ~/cloud2'de çalışmıyordu)
 #
 # Matrix: 4 victim × 4 attacker × 10 run = 160 experiment, ~173 dakika
 # ============================================================
@@ -111,25 +111,25 @@ launch_victim() {
             while true; do
                 numactl --physcpubind=$VICTIM_CORE --membind=$NUMA_NODE \
                     sysbench cpu --cpu-max-prime=50000 run > /dev/null 2>&1
-            done </dev/null >/dev/null 2>&1 &
+            done &
             ;;
         redis-benchmark)
             while true; do
                 numactl --physcpubind=$VICTIM_CORE --membind=$NUMA_NODE \
                     redis-benchmark -t set,get -n 100000000 -q > /dev/null 2>&1
-            done </dev/null >/dev/null 2>&1 &
+            done &
             ;;
         mcf)
             while true; do
                 numactl --physcpubind=$VICTIM_CORE --membind=$NUMA_NODE \
                     mcf inp.in > /dev/null 2>&1
-            done </dev/null >/dev/null 2>&1 &
+            done &
             ;;
         x264)
             while true; do
                 numactl --physcpubind=$VICTIM_CORE --membind=$NUMA_NODE \
                     x264 --crf 20 -o /dev/null /tmp/test_video.y4m > /dev/null 2>&1
-            done </dev/null >/dev/null 2>&1 &
+            done &
             ;;
         *)
             echo -e "${RED}[-] Bilinmeyen victim: $victim${NC}"
@@ -150,19 +150,19 @@ launch_attacker() {
             while true; do
                 numactl --physcpubind=$ATTACKER_CORE --membind=$NUMA_NODE \
                     "$STREAM_BIN" > /dev/null 2>&1
-            done </dev/null >/dev/null 2>&1 &
+            done &
             echo $!
             ;;
         stress-ng)
             numactl --physcpubind=$ATTACKER_CORE --membind=$NUMA_NODE \
-                stress-ng --matrix 1 --cache 1 </dev/null >/dev/null 2>&1 &
+                stress-ng --matrix 1 --cache 1 > /dev/null 2>&1 &
             echo $!
             ;;
         mcf-attacker)
             while true; do
                 numactl --physcpubind=$ATTACKER_CORE --membind=$NUMA_NODE \
                     mcf inp.in > /dev/null 2>&1
-            done </dev/null >/dev/null 2>&1 &
+            done &
             echo $!
             ;;
         *)

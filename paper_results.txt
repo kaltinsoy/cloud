@@ -1,0 +1,40 @@
+Noisy-Neighbor — Paper Results (v2, REPS=5)
+Tarih: Fri Jun 12 19:02:54 UTC 2026
+Ayar: samples_per_phase=7, policy=strangulate, ATTACK_WAIT=35s
+============================================================
+SENARYO: mcf_vs_STREAM
+  mitigation_result event sayisi: 5
+  Recovery (mean +/- std): +3.8% +/- 3.8%
+  Recovery (min / max):    +0.5% / +9.3%
+  Status: ineffective=5
+  Tekil event'ler:
+    IPC 0.238 -> 0.241   recovery +1.4%   [ineffective]
+    IPC 0.241 -> 0.264   recovery +9.3%   [ineffective]
+    IPC 0.244 -> 0.246   recovery +0.5%   [ineffective]
+    IPC 0.241 -> 0.256   recovery +6.1%   [ineffective]
+    IPC 0.241 -> 0.245   recovery +1.6%   [ineffective]
+============================================================
+SENARYO: mcf_vs_stress-ng
+  mitigation_result event sayisi: 6
+  Recovery (mean +/- std): +5.0% +/- 4.9%
+  Recovery (min / max):    +0.9% / +14.5%
+  Status: ineffective=5, partial=1
+  Tekil event'ler:
+    IPC 0.259 -> 0.272   recovery +5.2%   [ineffective]
+    IPC 0.263 -> 0.265   recovery +0.9%   [ineffective]
+    IPC 0.260 -> 0.269   recovery +3.6%   [ineffective]
+    IPC 0.259 -> 0.267   recovery +2.8%   [ineffective]
+    IPC 0.260 -> 0.267   recovery +2.8%   [ineffective]
+    IPC 0.237 -> 0.271   recovery +14.5%   [partial]
+============================================================
+SENARYO: redis_vs_STREAM
+  mitigation_result event sayisi: 5
+  Recovery (mean +/- std): +0.5% +/- 0.1%
+  Recovery (min / max):    +0.4% / +0.6%
+  Status: ineffective=5
+  Tekil event'ler:
+    IPC 0.714 -> 0.717   recovery +0.5%   [ineffective]
+    IPC 0.714 -> 0.718   recovery +0.6%   [ineffective]
+    IPC 0.715 -> 0.718   recovery +0.4%   [ineffective]
+    IPC 0.714 -> 0.718   recovery +0.6%   [ineffective]
+    IPC 0.713 -> 0.716   recovery +0.4%   [ineffective]
