@@ -73,11 +73,13 @@ Temenos detects noisy-neighbor interference from commodity hardware counters, th
 | `exp7_x264.py` | Sec. VI-F: x264 victim | `exp7_ipc.csv` |
 | `exp9_mba_calibration.py` | Sec. VI-D: MBA calibration | `exp9_mba_calibration*.txt` |
 | `exp10_overhead.py` | Sec. VI-G: control-plane overhead | `exp10_overhead.txt` |
-| `run_scenarios_v2.sh` + `live_daemon2.py` | Sec. VI-C: live single-aggressor verdicts | `paper_results*.txt`, `paper_results_*.json` |
+| `run_scenarios_v2.sh` + `live_daemon2.py` | Sec. VI-C: live single-aggressor verdicts | `paper_results.txt` (n=5 per scenario), `paper_results_v1.txt` (earlier single trigger), `paper_results_*.json` |
+| `leakage_eval.py` | Sec. VI-A/B: leakage-aware detector evaluation, feature importance | `leakage_results.txt` |
+| `figures/make_fig_results.py`, `figures/make_fig1.py` | Fig. 2 (from `sweep.csv` + `exp6_results_*.txt`), Fig. 1 | `figures/fig_results.png`, `figures/fig1.png` |
 
 The following are exploratory or superseded and not used in the paper's figures or tables: `exp3_timeseries.py` (`ts_raw.csv`), `exp4_blind_cost.py` (`blind_cost.txt`), and `exp5_policy_compare.py` (`exp5_*`, superseded by the full factorial in `exp6`).
 
-The leakage-aware group-split evaluation reported in the paper (F1 = 0.9991, 5-fold group CV 0.9995 ± 0.0001) was produced by a separate script that is not yet in this repository. `train_model.py` itself uses random splits for the deployed model.
+`leakage_eval.py` reproduces the leakage-aware evaluation reported in the paper. With a group split by experiment it gives F1 = 0.9991, and group 5-fold CV gives 0.9995 ± 0.0001. `train_model.py` trains the deployed model with random splits.
 
 ## Reproducing
 
@@ -101,6 +103,7 @@ gcc -O3 mcf_dummy.c -o mcf && sudo mv mcf /usr/local/bin/mcf     # MemBench
 # 4. Collect the training data and train
 sudo bash run_experiments.sh          # ~3 h: 160 runs
 python3 train_model.py
+python3 leakage_eval.py              # leakage-aware evaluation (paper Sec. VI-A)
 
 # 5. Run the live loop (optional dashboard: python3 app.py)
 sudo python3 live_daemon2.py
@@ -112,6 +115,10 @@ sudo python3 exp9_mba_calibration.py
 sudo python3 exp10_overhead.py
 sudo python3 exp7_x264.py
 bash exp1_redis_tail.sh               # see the note below
+
+# 7. Regenerate the figures from the raw outputs
+python3 figures/make_fig_results.py
+python3 figures/make_fig1.py
 ```
 
 **Redis note.** Stop any system Redis first (`sudo systemctl stop redis-server`). Otherwise redis-benchmark talks to that unpinned instance on port 6379 instead of the core-pinned one the script starts. The `host configuration "save"` line in the output must be empty.
@@ -130,7 +137,7 @@ These are stated in the paper:
 
 ## Other files
 
-`readme.md` (lowercase), `GUNCELLEME_NOTU.md`, `MIGRATION_NOTES.md`, `*.backup`, and `cloud-main-fixed.zip` are earlier development notes and snapshots, kept for history. Parts of them are outdated; the paper and this README are authoritative.
+`GUNCELLEME_NOTU.md` and `MIGRATION_NOTES.md` are earlier development notes, written in Turkish, and kept for history. Where they differ from the paper or this README, the paper and this README are authoritative.
 
 ## Citation
 

@@ -1,0 +1,21 @@
+Leakage-aware evaluation (leakage_eval.py) — master_dataset.csv, 86,720 rows, 160 experiments
+Class balance: normal 21,981 (25.3%) / interference 64,739 (74.7%)
+
+RANDOM row split (80/20) [leaky baseline]:
+  F1=0.9995  Precision=0.9995  Recall=0.9996  CM=[[4389,7],[5,12943]]
+
+GROUP split by experiment (80/20) [leakage-aware]:
+  F1=0.9991  Precision=0.9996  Recall=0.9987  CM=[[6023,5],[15,11411]]
+  train experiments=128  test experiments=32
+
+GROUP 5-fold CV (leakage-aware):
+  fold F1s = 0.9997, 0.9994, 0.9995, 0.9995, 0.9993
+  mean F1 = 0.9995 +/- 0.0001
+
+Feature importance (group model):
+  Total_MB_per_sec 43.1% | cache_dominance_score 19.4% | LLC-load-misses 16.4% | LLC-loads 12.2% | IPC 8.9%
+
+Conclusion: group-split F1 (0.9991) ~= random-split F1 (0.9995) => intra-experiment temporal correlation
+does not inflate the score. Note: every aggressor-present sample trips at least one pressure signal, so the
+labels coincide with aggressor presence and the near-perfect F1 largely reflects the definitional separability
+of the classes (see paper Sec. VI-A); read it as a sanity check on the detector.

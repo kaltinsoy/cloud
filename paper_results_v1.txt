@@ -1,0 +1,31 @@
+Noisy-Neighbor — Paper Results
+Tarih: Fri Jun 12 17:34:43 UTC 2026
+Ayar: samples_per_phase=7, policy=strangulate, DURATION=180s
+============================================================
+SENARYO: mcf_vs_STREAM
+  mitigation_result event sayisi: 1
+  Recovery (mean +/- std): +19.0% +/- 0.0%
+  Recovery (min / max):    +19.0% / +19.0%
+  Status: partial=1
+  Tekil event'ler:
+    IPC 0.215 -> 0.256   recovery +19.0%   [partial]
+============================================================
+SENARYO: mcf_vs_stress-ng
+  mitigation_result event sayisi: 5
+  Recovery (mean +/- std): +12.3% +/- 27.8%
+  Recovery (min / max):    -4.0% / +61.7%
+  Status: ineffective=4, effective=1
+  Tekil event'ler:
+    IPC 0.259 -> 0.249   recovery -4.0%   [ineffective]
+    IPC 0.259 -> 0.268   recovery +3.5%   [ineffective]
+    IPC 0.260 -> 0.268   recovery +3.1%   [ineffective]
+    IPC 0.256 -> 0.249   recovery -2.6%   [ineffective]
+    IPC 0.259 -> 0.419   recovery +61.7%   [effective]
+============================================================
+SENARYO: redis_vs_STREAM
+  mitigation_result event sayisi: 1
+  Recovery (mean +/- std): +0.3% +/- 0.0%
+  Recovery (min / max):    +0.3% / +0.3%
+  Status: ineffective=1
+  Tekil event'ler:
+    IPC 0.709 -> 0.712   recovery +0.3%   [ineffective]
